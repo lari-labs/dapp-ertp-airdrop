@@ -1,0 +1,15 @@
+Pseudo Startup Flow: {
+  # ## prepare airdrop tokens
+  explaination: |md
+             
+       ```js
+
+       const createPaymentPurse = issuer => Promise.resolve(issuer.createPurse());
+      
+       
+       mintTokens
+        .then(tokens => airdropPurse.deposit(tokens))
+        .then(purse => initializeAirdrop(issuer, purse,  'eaff029eaaieijlyrk227e', claimPeriodInSeconds ))
+    ```
+  |
+}

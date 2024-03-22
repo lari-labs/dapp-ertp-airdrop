@@ -1,0 +1,33 @@
+startInstance: "Airdrop Campaign Startup" {
+  shape: page
+  label.near: outside-top-center
+  explaination: |md
+
+     ### IssuerKeywordRecord - `{ airdropIssuer }`
+     - Obtain reference to issuer during mint process and pass it into the airdropCampaign contract.
+     - **Work Item** Bulder DAO Approval
+         - Get concrete information surrounding governance process for adding issuer to the chain (or chain's `agoricNames` namehub.)). 
+
+     ### customTerms
+     - rootHash (`String`)
+         - merkle root of all eligible airdrop addresses
+     - endTime (`BigInt`)
+         - total number of seconds that the airdrop's claiming window is to remain open.
+     - airdropPurse - (`Purse`)
+         - Purse containing newly minted tokem
+       - Balance decreases with each succesful claim. Tokens are trasnfereed from `airdropPurse` to `claimerPurse`.
+     
+    ### privateArgs
+     - distributionSchedule: createDistributionConfig(),
+     - purse: airdropPurse,
+         - Purse containing newly minted tokem
+        - Balance decreases with each succesful claim. Tokens are trasnfereed from `airdropPurse` to `claimerPurse`.
+     - timer: timerService
+
+
+     ## 
+  |
+  style.shadow: true
+  style.multiple: false
+  style.stroke: "#99a8db"
+}
