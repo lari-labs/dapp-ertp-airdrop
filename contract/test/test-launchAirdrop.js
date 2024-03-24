@@ -7,7 +7,7 @@ import { AmountMath, AssetKind } from '@agoric/ertp/src/amountMath.js';
 import { makeIssuerKit } from '@agoric/ertp';
 import { makeWalletFactory } from './wallet-tools.js';
 import { Id, IO, Task } from '../src/airdrop/adts/monads.js';
-import { makeFan, launcherLarry, starterSam } from './market-actors.js';
+import { launcherLarry, starterSam } from './market-actors.js';
 import {
   makeBundleCacheContext,
   bootAndInstallBundles,
@@ -20,6 +20,7 @@ import {
 import { makeStableFaucet } from './power-tools/mintStable.js';
 import { makeClientMarshaller } from '../src/marshalTables.js';
 import { documentStorageSchema } from './airdropData/storageDoc.js';
+import '@agoric/store/exported.js';
 
 const nodeRequire = createRequire(import.meta.url);
 
@@ -35,6 +36,20 @@ const bundleRoots = {
 const test = anyTest;
 
 test.before(async t => (t.context = await makeBundleCacheContext(t)));
+const defaultDistributionArray = [
+  { windowLength: 259_200n, tokenQuantity: 10_000n },
+  { windowLength: 864_000n, tokenQuantity: 6_000n },
+  { windowLength: 864_000n, tokenQuantity: 3_000n },
+  { windowLength: 864_000n, tokenQuantity: 1_500n },
+  { windowLength: 864_000n, tokenQuantity: 750n },
+];
+const createDistributionConfig = (array = defaultDistributionArray) =>
+  array.map(({ windowLength, tokenQuantity }, index) => ({
+    windowLength,
+    tokenQuantity,
+    index,
+    inDays: windowLength / 86_400n,
+  }));
 
 test.serial('boot, walletFactory, contractStarter', async t => {
   const bootKit = await bootAndInstallBundles(t, bundleRoots);
@@ -170,6 +185,7 @@ test.serial('start launchIt instance to launch token', async t => {
       claimWindowLength: 8_640_000n * 28n,
     },
     privateArgs: {
+      distributionSchedule: createDistributionConfig(),
       purse: airdropPurse,
       timer: timerService,
     },
@@ -192,6 +208,6 @@ test.serial('start launchIt instance to launch token', async t => {
 
   const m = makeClientMarshaller();
   const storage = await powers.consume.chainStorage;
-  const note = `boardAux for launchIt, contractStarter instances`;
+  const note = `boardAux for airdropCampaign, contractStarter instances`;
   await documentStorageSchema(t, storage, { note, marshaller: m });
 });

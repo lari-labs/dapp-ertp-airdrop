@@ -1,0 +1,116 @@
+vars: {
+  d2-config: {
+    layout-engine: tala
+  }
+}
+# direction: down
+# a -> b -> c
+
+# b: {
+#   direction: right
+#   1 -> 2 -> 3
+# }
+
+# a: "makeDepositAirdropTokens" {
+#   direction: right
+#   unfunded -> on-deck
+#   unfunded: {
+#     explanation: ""
+#   }
+# }
+
+# Alice -> DepositSupply -
+
+Airdrop: "ERTP Airdrop Campaign" {
+  Startup: "Contract Start Flow" {
+    shape: step
+  }
+  Claim: "Eligible Account Flow" {
+    shape: step
+  }
+}
+
+Airdrop.Startup.link: layers.Start_Contract
+
+layers: {
+  facets: {
+    CreatorFacet: {
+      shape: page
+      creatorFacet: {
+        shape: circle
+      }
+    }
+    PublicFacet: {
+      shape: page
+      creatorFacet: {
+        shape: circle
+      }
+    }
+  }
+  StartResult: {
+       CreatorFacet: {
+      shape: page
+      creatorFacet: {
+        shape: circle
+      }
+    }
+    PublicFacet: {
+      shape: page
+      creatorFacet: {
+        shape: circle
+      }
+    }
+  }
+  Start_Contract: {
+    Alice: {
+      shape: person
+      near: top-left
+    }
+    StartFn: "startInstance\n" {
+      shape: step
+      explanation: |md
+        - { AirdropToken: memeIssuer }
+        - { customTerms: rootHash }
+        - { timerService, startDate, distributionSchedule }
+      |
+      state: "state = ({ \n totalClaimed: 0n \n status: 'unfunded' \n })" {
+        shape: parallelogram
+      }
+    }
+    
+    steps: {
+      ContractStartFn: {
+        direction: right
+        Alice -> StartFn
+        StartFn.StartOperations: {
+          direction: right
+          assertStartValues -> prepareAirdropCampaign -> SetupTimers: {shape: queue}
+        }
+      }
+      StartResult: layers.StartResult
+      Success: {
+        direction: right
+        StartFn -> StartResult
+
+        ...@templates/state-unfunded
+      }
+    }
+  }
+  funded: {
+    DepositSupply: "E(creatorFacet).makeDepositInvitation()" {
+      shape: step
+
+      state: "state = ({ \n totalClaimed: 0n \n status: 'unfunded' \n })" {
+        shape: circle
+      }
+    }
+    direction: down
+    Alice -> DepositSupply
+  }
+}
+
+steps: {
+  start: {
+    layers.AdminOps
+  }
+}

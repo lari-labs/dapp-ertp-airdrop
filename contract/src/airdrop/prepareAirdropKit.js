@@ -52,26 +52,6 @@ const AirdropIssuerDetailsShape = harden({
   issuer: IssuerShape,
 });
 
-const initState = zcf => baggage =>
-  harden({
-    treeRoot: baggage.get('treeRoot'),
-    claimedUsersStore: baggage.get('claimedUsersStore'),
-    adminSeat: zcf.makeEmptySeatKit().zcfSeat,
-    marshaller: baggage.get('marshaller'),
-    storageNode: baggage.get('storageNode'),
-    claimPeriodDetails: {
-      isActive: false,
-      claimPeriodEndTime: !baggage.has('claimPeriodEndTime')
-        ? null
-        : baggage.get('claimPeriodEndTime'),
-    },
-    airdropIssuerDetails: {
-      issuer: zcf.getTerms().issuers.Airdrop,
-      brand: zcf.getTerms().brands.Airdrop,
-    },
-    airdropPurse: baggage.get('airdropPurse'),
-  });
-
 const finalMetrics = (promise, purse) =>
   promise.resolve({
     remainingTokens: purse.getCurrentAmount(),
@@ -81,17 +61,19 @@ const startupAssertion = (arg, keyName) =>
     arg,
     `Contract has been started without required property: ${keyName}.`,
   );
+
 const makeWaker = (name, func) => {
   return Far(name, {
     wake: timestamp => func(timestamp),
   });
 };
+
 export const start = async (zcf, privateArgs, baggage) => {
   // assertIssuerKeywords(zcf, harden(['Airdroplets']));
 
   const { issuers, rootHash: merkleRoot, claimWindowLength } = zcf.getTerms();
 
-  const { Airdroplets } = zcf.getTerms().issuers;
+  const { Airdroplets } = issuers;
 
   console.log('PEELING OFF FROM TERMS.ISSUERs', { Airdroplets });
   // TODO handle fail cases?
@@ -99,19 +81,22 @@ export const start = async (zcf, privateArgs, baggage) => {
 
   console.log(zcf.getTerms(), { privateArgs });
   handleFirstIncarnation(baggage, 'airdropCampaignVersion');
-
+  startupAssertion(
+    privateArgs.distributionSchedule,
+    'privateArgs.distributionSchedule',
+  );
   startupAssertion(privateArgs.purse, 'privateArgs.purse');
   startupAssertion(privateArgs.timer, 'privateArgs.purse');
 
   startupAssertion(merkleRoot, 'terms.rootHash');
   startupAssertion(claimWindowLength, 'terms.claimWindowLength');
-  tracer('privateArgs:', privateArgs);
+  tracer('privateArgs:'.concat(privateArgs.toString()));
 
   const terms = zcf.getTerms();
 
   console.log('TERMS', terms);
   const {
-    issuers: { AirdropIssuer },
+    issuers: { Airdroplets: AirdropIssuer },
   } = terms;
   const {
     rootHash,
@@ -126,7 +111,7 @@ export const start = async (zcf, privateArgs, baggage) => {
         durable: true,
       }),
     claimWindowTimeframe: () => claimWindowLength,
-    airdropPurse: () => privateArgs.purse,
+    airdropPurse: () => E(AirdropIssuer).makeEmptyPurse(),
     claimWindowTimer: () => privateArgs.timer,
   });
 
@@ -172,7 +157,10 @@ export const start = async (zcf, privateArgs, baggage) => {
       rootHash: hash,
       claimedUsersStore: claimeeStore,
       internalPurse,
+      totalTokensClaimed: 0n,
       timer,
+      distributionConfig: privateArgs.distributionSchedule,
+      currentEpoch: privateArgs.distributionSchedule[0],
     }),
     {
       helpers: {
@@ -183,13 +171,16 @@ export const start = async (zcf, privateArgs, baggage) => {
           return this.state.internalPurse.getDepositFacet();
         },
         async setAirdropWaker() {
+          console.group('---------- inside setAirdropWaker----------');
+          console.log('------------------------');
+          console.log('this.state::', this.state.distributionConfig);
+          console.log('------------------------');
+          console.log('::');
+          console.log('------------------------');
+          console.groupEnd();
           const claimWindowPk = makePromiseKit();
           const currentTime = await E(this.state.timer).getCurrentTimestamp();
 
-          console.log('INSIDE SET AIRDROP WAKER ::::', {
-            currentTime,
-            claimWindowPk,
-          });
           await E(this.state.timer).setWakeup(
             claimWindowTimeframe,
             makeWaker('airdropWaker', timestamp => {
@@ -228,6 +219,8 @@ export const start = async (zcf, privateArgs, baggage) => {
             );
 
             console.log(
+              'THIS.STATE.currentEpochw',
+              this.state.currentEpoch,
               'Internal Depsoit Facet has current amount',
               this.state.internalPurse.getCurrentAmount(),
             );

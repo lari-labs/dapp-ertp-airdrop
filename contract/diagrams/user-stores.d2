@@ -1,0 +1,138 @@
+vars: {
+    d2-config: {
+      layout-engine: tala
+      theme-id: 302
+    }
+  }
+  # direction: down
+  # a -> b -> c
+  
+  # b: {
+  #   direction: right
+  #   1 -> 2 -> 3
+  # }
+  
+  # a: "makeDepositAirdropTokens" {
+  #   direction: right
+  #   unfunded -> on-deck
+  #   unfunded: {
+  #     explanation: ""
+  #   }
+  # }
+  
+  # Alice -> DepositSupply -
+  
+  Airdrop: "ERTP Airdrop Campaign" {
+    Startup: "Contract Start Flow" {
+      shape: step
+    }
+    Claim: "Eligible Account Flow" {
+      shape: step
+    }
+  }
+  
+  Airdrop.Startup.link: layers.Setup
+  
+  layers: {
+    Setup: {
+      # Success: {
+      #   direction: right
+      #   StartFn -> StartResult
+      # }
+      
+      steps: {
+        StartContractInstance: {
+          direction: right
+          Alice: {
+            shape: person
+            near: top-left
+          }
+          StartFn: "startInstance(\n { AirdropToken: memeIssuer }\n { customTerms: rootHash },\n{ timerService, startDate, distributionSchedule } \n })" {
+            shape: step
+            explanation: |md
+              - { AirdropToken: memeIssuer }
+              - { customTerms: rootHash }
+              - { timerService, startDate, distributionSchedule }
+            |
+            StartOperations: {
+              direction: right
+              assertStartValues
+              prepareAirdropCampaign
+              SetupTimers
+              assertStartValues -> prepareAirdropCampaign: {
+                shape: queue
+              }
+              prepareAirdropCampaign -> SetupTimers: {
+                shape: queue
+              }
+            }
+            label: {
+              near: outside-top-center
+            }
+          }
+          Alice -> StartFn: "Alice initializes Airdrop Contract"
+          StartFn.label.near: outside-top-left
+        }
+  
+        ContractStartFn: {
+          Alice -> StartFn
+  
+          StartResult: "({ creatorFacet, \n publicFacet \n })" {
+            shape: circle
+          }
+  
+          #  {
+          #   shape: circle
+          #   creatorFacet
+          # }
+          StartFn -> StartResult
+  
+          state: {
+            ...@templates/state-unfunded
+            near: StartResult
+          }
+        }
+      }
+    }
+    fund_contract: {
+      cf: "creatorFacet" {
+        shape: circle
+      }
+      Alice: {
+        shape: Person
+      }
+  
+      direction: right
+      Alice -> cf
+      cf -> Alice: "Alice obtains reference to \nfund airdrop invitationMaker"
+  
+      DepositSupply: "E(creatorFacet).makeDepositInvitation()" {
+        shape: step
+        label.near: outside-top-center
+      }
+      Alice -> DepositSupply: "Supplies Contract with Payment"
+      Result: "Contract State Updates" {
+        explanation: |md
+            ```javascript
+            
+            1. Airdrop Purse is no longer empty
+                - state.airdropPurse.deposit(memeTokenPayment)
+            2. `state.status` transitions to "funded state"
+          ```
+        |
+      }
+      DepositSupply -> Result
+  
+      deposit_tokens: {
+        DepositSupply: "E(creatorFacet).makeDepositInvitation()" {
+          shape: step
+        }
+        direction: down
+        Alice -> DepositSupply
+      }
+    }
+    claim: {
+      Christine
+    }
+  }
+  

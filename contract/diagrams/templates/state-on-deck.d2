@@ -1,0 +1,28 @@
+State: "Contract State\n----------------- \nStartFnSuccess" {
+    shape: page
+    explanation: |md
+      &nbsp;
+      ```javascript
+       ({
+          status: "on-deck",
+          claimWindowTimeframe: claimWindow,
+          rootHash: hash,
+          claimedUsersStore: claimeeStore,
+          internalPurse,
+          totalTokensClaimed: 0n,
+          distributionConfig: privateArgs.distributionSchedule,
+          currentEpoch: privateArgs.distributionSchedule[0],
+        })
+      ```
+    | {
+      style.font-color: "#ffda90"
+      style.font-size: 18
+      style.opacity: 1
+    }
+  
+    label.near: top-center
+    style.fill: "#257a79"
+    style.font-color: "#ffda90"
+    style.fill-pattern: lines
+  }
+  

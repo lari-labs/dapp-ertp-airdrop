@@ -12,6 +12,12 @@ export const documentStorageSchema = async (t, storage, opts) => {
   // chainStorage publication is unsynchronized
   await eventLoopIteration();
 
+  console.group('---------- inside documentStorageSchema----------');
+  console.log('------------------------');
+  console.log('storage::', storage);
+  console.log('------------------------');
+  console.log('opts::', opts);
+
   const { pattern, replacement } =
     'pattern' in opts
       ? opts
@@ -29,10 +35,17 @@ export const documentStorageSchema = async (t, storage, opts) => {
       : _entry => true,
   );
 
+  console.log('------------------------');
+  console.log('pruned::', pruned);
   const note =
     'note' in opts
       ? opts.note
       : `Under "published", the "${opts.node}" node is delegated to ${opts.owner}.`;
+  console.log('------------------------');
+  console.log('note::', note);
+  console.log('------------------------');
+  console.groupEnd();
+
   const boilerplate = `
 The example below illustrates the schema of the data published there.
 
