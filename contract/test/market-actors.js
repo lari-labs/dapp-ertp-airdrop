@@ -667,12 +667,13 @@ export const launcherLarry = async (t, { wallet }, wellKnown) => {
         emptyPurse: AIRDROPLETS.issuer.makeEmptyPurse(),
         deadline,
       },
-      privateArgs: { ...privateArgs, timer },
+      privateArgs: { ...privateArgs, timer: await timer },
     };
 
     /** @type {import('@agoric/smart-wallet').OfferSpec} */
 
     const id = `launch-${(offerSeq += 1)}`;
+    console.log('about to start wit h####', { startOpts });
     t.log('Larry pays', startInstance, 'to start', startOpts.label);
     const updates = await E(wallet.offers).executeOffer({
       id,
@@ -715,16 +716,18 @@ export const launcherLarry = async (t, { wallet }, wellKnown) => {
     return result;
   };
 
-  const collect = async () => {
+  const collect = async (
+    spec = {
+      source: 'continuing',
+      previousOffer: launchOfferId,
+      invitationMakerName: 'makeOpenClaimingWindow',
+    },
+  ) => {
     t.log('Larry collects at', deadline);
     const id = `collect-${(offerSeq += 1)}`;
     const up2 = await E(wallet.offers).executeOffer({
       id,
-      invitationSpec: {
-        source: 'continuing',
-        previousOffer: launchOfferId,
-        invitationMakerName: 'Collect',
-      },
+      invitationSpec: spec,
     });
     const seat = seatLike(up2);
     const result = await E(seat).getOfferResult();

@@ -1,12 +1,13 @@
 // @ts-check
+// eslint-disable-next-line import/order
+import { test as anyTest } from './airdropData/prepare-test-env-ava.js';
 import { createRequire } from 'module';
 import { E } from '@endo/far';
 import { AmountMath, AssetKind } from '@agoric/ertp/src/amountMath.js';
 import { makeIssuerKit } from '@agoric/ertp';
 import { makeWalletFactory } from './wallet-tools.js';
 import { Id, IO, Task } from '../src/airdrop/adts/monads.js';
-import { test as anyTest } from './airdropData/prepare-test-env-ava.js';
-import { makeFan, launcherLarry, starterSam } from './market-actors.js';
+import { launcherLarry, starterSam } from './market-actors.js';
 import {
   makeBundleCacheContext,
   bootAndInstallBundles,
@@ -19,6 +20,7 @@ import {
 import { makeStableFaucet } from './power-tools/mintStable.js';
 import { makeClientMarshaller } from '../src/marshalTables.js';
 import { documentStorageSchema } from './airdropData/storageDoc.js';
+import '@agoric/store/exported.js';
 
 const nodeRequire = createRequire(import.meta.url);
 
@@ -34,6 +36,20 @@ const bundleRoots = {
 const test = anyTest;
 
 test.before(async t => (t.context = await makeBundleCacheContext(t)));
+const defaultDistributionArray = [
+  { windowLength: 259_200n, tokenQuantity: 10_000n },
+  { windowLength: 864_000n, tokenQuantity: 6_000n },
+  { windowLength: 864_000n, tokenQuantity: 3_000n },
+  { windowLength: 864_000n, tokenQuantity: 1_500n },
+  { windowLength: 864_000n, tokenQuantity: 750n },
+];
+const createDistributionConfig = (array = defaultDistributionArray) =>
+  array.map(({ windowLength, tokenQuantity }, index) => ({
+    windowLength,
+    tokenQuantity,
+    index,
+    inDays: windowLength / 86_400n,
+  }));
 
 test.serial('boot, walletFactory, contractStarter', async t => {
   const bootKit = await bootAndInstallBundles(t, bundleRoots);
@@ -89,13 +105,15 @@ test.serial('start launchIt instance to launch token', async t => {
   const brand = {
     Invitation: await powers.brand.consume.Invitation,
   };
+  const timerService = await powers.consume.chainTimerService; // XXX
+
   /**
    * @type {import('./market-actors.js').WellKnown &
    *  import('./market-actors.js').WellKnownKinds &
    *  import('./market-actors.js').BoardAux}
    */
   const wellKnown = {
-    timerService: await powers.consume.chainTimerService, // XXX
+    timerService,
     installation: powers.installation.consume,
     instance: powers.instance.consume,
     issuer: powers.issuer.consume,
@@ -158,7 +176,7 @@ test.serial('start launchIt instance to launch token', async t => {
     await mintBrandedPayment(20n * 1_000_000n),
   );
 
-  const launcher = await launcherLarry(t, { wallet: wallets.larry }, wellKnown);
+  const larry = await launcherLarry(t, { wallet: wallets.larry }, wellKnown);
 
   const startOpts = {
     customTerms: {
@@ -167,19 +185,13 @@ test.serial('start launchIt instance to launch token', async t => {
       claimWindowLength: 8_640_000n * 28n,
     },
     privateArgs: {
+      distributionSchedule: createDistributionConfig(),
       purse: airdropPurse,
+      timer: timerService,
     },
   };
-  const liveAirdrop = await E(launcher)
+  const instance = await E(larry)
     .launch(installation, startOpts)
-    .then((res, rej) =>
-      rej
-        ? new Error('Error launching airdrop')
-        : E(res).launch(installation, {
-            ...startOpts,
-            customTerms: { ...startOpts.customTerms, claimWindowLength: 11n },
-          }),
-    )
     .catch(err => {
       return new Error('Error starting contract', err);
     });
@@ -191,11 +203,11 @@ test.serial('start launchIt instance to launch token', async t => {
   t.log('time passed... to', afterDeadline.absValue);
 
   t.log('TODO: should fan figure out his share of the proceeds?');
-  await E(launcher).openAirdrop();
+  await E(larry).collect();
   // await Promise.all(fans.map(fan => E(fan).redeem(instance)));
 
   const m = makeClientMarshaller();
   const storage = await powers.consume.chainStorage;
-  const note = `boardAux for launchIt, contractStarter instances`;
+  const note = `boardAux for airdropCampaign, contractStarter instances`;
   await documentStorageSchema(t, storage, { note, marshaller: m });
 });
