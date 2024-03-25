@@ -97,6 +97,7 @@ export const receiverRose = async (t, { wallet }, wellKnown, { toSend }) => {
   const done = await allValues(
     Object.fromEntries(
       Object.entries(initial).map(([name, update]) => {
+        console.log('inside purseNotifier updater function');
         const amtP = E(purseNotifier[name])
           .getUpdateSince(update.updateCount)
           .then(u => {

@@ -12,10 +12,7 @@ import {
   AmountMath,
   DepositFacetShape,
 } from '@agoric/ertp';
-import {
-  assertIssuerKeywords,
-  provideAll,
-} from '@agoric/zoe/src/contractSupport/index.js';
+import { provideAll } from '@agoric/zoe/src/contractSupport/index.js';
 import { E, Far } from '@endo/far';
 import { makePromiseKit } from '@endo/promise-kit';
 import { AIRDROP_ADMIN_MESSAGES, CLAIM_MESSAGES } from './helpers/messages.js';

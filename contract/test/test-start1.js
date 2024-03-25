@@ -1,8 +1,8 @@
 // @ts-check
+import { test as anyTest } from './prepare-test-env-ava.js';
 import { E } from '@endo/far';
 import { AmountMath, AssetKind } from '@agoric/ertp';
 import { createRequire } from 'module';
-import { test as anyTest } from './airdropData/prepare-test-env-ava.js';
 import {
   bootAndInstallBundles,
   getBundleId,
@@ -14,9 +14,9 @@ import {
 } from '../src/start-contractStarter.js';
 import { mockWalletFactory } from './wallet-tools.js';
 import { receiverRose, senderContract, starterSam } from './market-actors.js';
-import { documentStorageSchema } from './airdropData/storageDoc.js';
+import { documentStorageSchema } from './storageDoc.js';
 import { makeClientMarshaller } from '../src/marshalTables.js';
-import { makeStableFaucet } from './power-tools/mintStable.js';
+import { makeStableFaucet } from './mintStable.js';
 
 /** @typedef {import('../src/start-contractStarter.js').ContractStarterPowers} ContractStarterPowers */
 
@@ -39,14 +39,10 @@ test('use contractStarter to start postalSvc', async t => {
     bundles,
     boardAux,
   } = await bootAndInstallBundles(t, assets);
-
-  console.log({ boardAux });
   const id = {
-    airdropCampaign: { bundleID: getBundleId(bundles.airdropCampaign) },
     contractStarter: { bundleID: getBundleId(bundles.contractStarter) },
     postalSvc: { bundleID: getBundleId(bundles.postalSvc) },
   };
-  console.log('ids ####', { id });
   /** @type { typeof powers0 & ContractStarterPowers} */
   // @ts-expect-error bootstrap powers evolve with BLD staker governance
   const powers = powers0;
@@ -61,9 +57,9 @@ test('use contractStarter to start postalSvc', async t => {
   };
 
   /**
-   * @type {import('./market-actors.js').WellKnown &
-   *  import('./market-actors.js').WellKnownKinds &
-   *  import('./market-actors.js').BoardAux}
+   * @type {import('./market-actors').WellKnown &
+   *  import('./market-actors').WellKnownKinds &
+   *  import('./market-actors').BoardAux}
    */
   const wellKnown = {
     installation: powers.installation.consume,
@@ -101,28 +97,13 @@ test('use contractStarter to start postalSvc', async t => {
   await E(wallet.sam.deposit).receive(
     await mintBrandedPayment(100n * 1_000_000n),
   );
-
-  const installation = await starterSam(
-    t,
-    { wallet: wallet.sam },
-    wellKnown,
-  ).then(sam =>
-    E(sam).install({
-      bundleID: id.airdropCampaign.bundleID,
-      label: 'airdropCampaign',
-    }),
-  );
-
-  t.log('installation ###', installation);
   const toSend = { ToDoEmpty: AmountMath.make(brand.Invitation, harden([])) };
   const sam = starterSam(t, { wallet: wallet.sam, ...id.postalSvc }, wellKnown);
   await Promise.all([
-    E(installation)
+    E(sam)
       .getPostalSvcTerms()
-      .then(customTerms => {
-        console.log('AFTER startSam ::::', { customTerms });
-
-        return E(sam)
+      .then(customTerms =>
+        E(sam)
           .installAndStart({
             instanceLabel: 'postalSvc',
             ...id.postalSvc,
@@ -131,8 +112,8 @@ test('use contractStarter to start postalSvc', async t => {
           .then(({ instance: postalSvc }) => {
             const terms = { postalSvc, destAddr: shared.destAddr };
             senderContract(t, { zoe, terms });
-          });
-      }),
+          }),
+      ),
     receiverRose(t, { wallet: wallet.rose }, wellKnown, { toSend }),
   ]);
 
