@@ -13,6 +13,7 @@
     "start": "yarn docker:make clean start-contract print-key",
     "build": "agoric run scripts/build-contract-deployer.js",
     "test": "ava --verbose",
+    "test:isolated": "watch 'clear && npx ava ./test/test-launchAirdrop.js -t | tap-color' ./src",
     "lint": "eslint '**/*.js'",
     "lint:fix": "eslint --fix '**/*.js'"
   },
@@ -54,7 +55,9 @@
     "@endo/far": "^0.2.22",
     "@endo/marshal": "^0.8.9",
     "@endo/patterns": "^0.2.5",
-    "@endo/promise-kit": "0.2.56"
+    "@endo/promise-kit": "0.2.56",
+    "@noble/hashes": "^1.4.0",
+    "@noble/secp256k1": "^2.1.0"
   },
   "ava": {
     "files": [
