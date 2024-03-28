@@ -652,6 +652,13 @@ export const launcherLarry = async (t, { wallet }, wellKnown) => {
     const { privateArgs, customTerms } = options;
     console.log({ privateArgs, customTerms });
     t.log('Larry prepares to launch', customTerms, 'at', deadline);
+    console.group('---------- inside launcher----------');
+    console.log('------------------------');
+    console.log('customTemrs::', customTerms);
+    console.log('------------------------');
+    console.log('privateArgs::', privateArgs);
+    console.log('------------------------');
+    console.groupEnd();
     const { name } = customTerms;
     const starterAux = await wellKnown.boardAux(instance.contractStarter);
     const { startInstance } = starterAux.terms.prices;
