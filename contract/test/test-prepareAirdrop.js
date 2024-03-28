@@ -24,6 +24,8 @@ import {
   getBundleId,
   makeBundleCacheContext,
 } from './boot-tools.js';
+import { createDistributionConfig } from './utils.js';
+import { makeCopySet } from '@endo/patterns';
 
 const makeSha256 = input => createHash('sha256').update(input).digest('hex');
 
@@ -146,21 +148,23 @@ const setupPurseNotifier = async purse => {
 const makeBundleId = ({ endoZipBase64Sha512 }) => `b1-${endoZipBase64Sha512}`;
 
 test('prepareAirdrop', async t => {
-  const { zoe, vatAdminState } = await setUpZoeForTest();
-
-  const installedBundles = await bootAndInstallBundles(t, bundleRoots);
-  const bundleIds = Object.entries(installedBundles.bundles).map(
-    ([key, val]) => ({ key, bundleId: makeBundleId(val) }),
-  );
-
+  const { bundles, powers } = await bootAndInstallBundles(t, bundleRoots);
+  const bundleIds = Object.entries(bundles).map(([key, val]) => ({
+    key,
+    bundleId: makeBundleId(val),
+  }));
   const [postSvcBundle, airdropBundle] = bundleIds;
+  const { feeMintAccess, zoe } = powers.consume;
+  const invitationIssuer = await E(zoe).getInvitationIssuer();
 
-  console.log(installedBundles, {
+  const timerService = await powers.consume.chainTimerService;
+
+  console.log({
     bundleIds,
-    b: await `b1-${installedBundles.bundles.endoZipBase64Sha512}`,
+    b: await `b1-${bundles.endoZipBase64Sha512}`,
   });
 
-  const { airdropCampaign } = installedBundles.bundles;
+  const { airdropCampaign } = bundles;
 
   const ids = {
     airdropCampaign: `b1-${airdropCampaign.endoZipBase64Sha512}`,
@@ -176,9 +180,8 @@ test('prepareAirdrop', async t => {
     Airdroplets: issuerKit.issuer,
   });
 
-  const contractTerms = {
-    claimWindowTimeframe: 86400n * 28n,
-  };
+  const { bundleCache } = t.context;
+
   const defaultPrivateArgs = {
     claimPeriodEndTime: oneDay * 28, // 4 Weeks
     tokenBrand: issuerKit.brand,
@@ -201,16 +204,28 @@ test('prepareAirdrop', async t => {
   await airdropPurse.deposit(issuerKit.mint.mintPayment(TOTAL_AIRDROP_SUPPLY));
 
   t.deepEqual(airdropPurse.getCurrentAmount(), airdroplets(1_000_000n));
+  const startOpts = {
+    customTerms: {
+      name: 'memecoinAirdrop',
+      rootHash: 'fs2defffdd8s88usd',
+      claimWindowLength: 8_640_000n * 28n,
+    },
+    privateArgs: {
+      claimWindowStartTime: BigInt(oneDay * 7),
+      distributionSchedule: makeCopySet(createDistributionConfig()).payload,
+      purse: airdropPurse,
+      timer: timerService,
+    },
+  };
+
+  const head = ([x, ...xs]) => x;
 
   const airdropInstance = await E(zoe).startInstance(
     airdropInstallation,
     airdropIssuerKeywordRecord,
-    {
-      rootHash: merkleTreeDetails.root,
-      claimWindowLength: 8_640_000n * 28n,
-    },
+    harden(startOpts.customTerms),
+    harden(startOpts.privateArgs),
     // @ts-ignore
-    makePrivateArgs({ purse: airdropPurse }),
   );
 
   const { creatorFacet, publicFacet } = airdropInstance;
@@ -227,11 +242,11 @@ test('prepareAirdrop', async t => {
   const { brand: airdropBrand, issuer } = issuerKit;
 
   const internalPurse = await E(creatorFacet).getPurse();
-  t.deepEqual(internalPurse.getCurrentAmount(), TOTAL_AIRDROP_SUPPLY);
+  t.deepEqual(internalPurse.getCurrentAmount(), airdroplets(0n));
 
   t.is(
     await E(publicFacet).getTreeRoot(),
-    'bdc991f6708c800b107ff2f9abc9d2ed3ed0a13a1585e31beab7e96fee1b1e95',
+    'fs2defffdd8s88usd',
     'public facet should expose a method for obtaining the merkle root',
   );
 
@@ -246,6 +261,14 @@ test('prepareAirdrop', async t => {
   t.deepEqual(
     await E(creatorFacet).depositAirdropPayment(initialDeposit),
     'Deposit success!',
+  );
+
+  const openClaimingWindowInvitation =
+    await E(creatorFacet).makeOpenClaimingWindow();
+
+  t.deepEqual(
+    await E(invitationIssuer).isLive(openClaimingWindowInvitation),
+    true,
   );
 
   const adminPurse = await E(creatorFacet).getPurse();
@@ -265,8 +288,13 @@ test('prepareAirdrop', async t => {
   const twentyMillionAirdropletsPayment = mintAirdropTokenPayment(
     twentyMillionAirdroplets,
   );
-  await E(creatorFacet).depositAirdropPayment(twentyMillionAirdropletsPayment);
+  const openAirdropInvittion = await E(zoe).offer(
+    openClaimingWindowInvitation,
+    { give: { Deposit: twentyMillionAirdroplets } },
+    { Deposit: twentyMillionAirdropletsPayment },
+  );
 
+  t.deepEqual(await E(openAirdropInvittion).getOfferResult(), {});
   t.deepEqual(
     await E(adminPurse).getCurrentAmount(),
     AmountMath.add(twentyMillionAirdroplets, twoThousandAirdroplets),

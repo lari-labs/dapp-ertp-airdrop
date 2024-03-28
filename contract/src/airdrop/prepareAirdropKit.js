@@ -12,11 +12,19 @@ import {
   AmountMath,
   DepositFacetShape,
 } from '@agoric/ertp';
-import { provideAll } from '@agoric/zoe/src/contractSupport/index.js';
+import {
+  atomicRearrange,
+  fromOnly,
+  provideAll,
+  toOnly,
+} from '@agoric/zoe/src/contractSupport/index.js';
 import { E, Far } from '@endo/far';
 import { makePromiseKit } from '@endo/promise-kit';
 import { AIRDROP_ADMIN_MESSAGES, CLAIM_MESSAGES } from './helpers/messages.js';
 import '../../types.js';
+import { makeCancelTokenMaker } from './helpers/time.js';
+
+const head = ([x, ...xs]) => x;
 
 const makeTracer = label => value => {
   console.log(label.toUpperCase(), '::::', value);
@@ -65,6 +73,11 @@ const makeWaker = (name, func) => {
   });
 };
 
+const createWakeup = async (timer, wakeUpTime, timeWaker, cancelTokenMaker) => {
+  const cancelToken = cancelTokenMaker();
+  await E(timer).setWakeup(wakeUpTime, timeWaker, cancelToken);
+};
+
 export const start = async (zcf, privateArgs, baggage) => {
   // assertIssuerKeywords(zcf, harden(['Airdroplets']));
 
@@ -82,6 +95,10 @@ export const start = async (zcf, privateArgs, baggage) => {
     privateArgs.distributionSchedule,
     'privateArgs.distributionSchedule',
   );
+  startupAssertion(
+    privateArgs.claimWindowStartTime,
+    'privateArgs.claimWindowStartTime',
+  );
   startupAssertion(privateArgs.purse, 'privateArgs.purse');
   startupAssertion(privateArgs.timer, 'privateArgs.purse');
 
@@ -91,16 +108,22 @@ export const start = async (zcf, privateArgs, baggage) => {
 
   const terms = zcf.getTerms();
 
+  const { zcfSeat: contractSeat } = zcf.makeEmptySeatKit();
+
   console.log('TERMS', terms);
+
+  const { distributionSchedule, timer } = privateArgs;
+
   const {
     issuers: { Airdroplets: AirdropIssuer },
+    brands: { Airdroplets: AirdropBrand },
   } = terms;
   const {
     rootHash,
     claimedUsersStore,
     claimWindowTimeframe,
     airdropPurse,
-    claimWindowTimer,
+    contractTimer,
   } = await provideAll(baggage, {
     rootHash: () => merkleRoot,
     claimedUsersStore: () =>
@@ -109,11 +132,11 @@ export const start = async (zcf, privateArgs, baggage) => {
       }),
     claimWindowTimeframe: () => claimWindowLength,
     airdropPurse: () => E(AirdropIssuer).makeEmptyPurse(),
-    claimWindowTimer: () => privateArgs.timer,
+    contractTimer: () => timer,
   });
 
   const claimFn = address => E(zcf.getTerms().proofHolderFacet).hashFn(address);
-  const openClaimingWindowHandler = async creatorSeat => {};
+
   /**
    * @typedef {object} AirdropIssuerDetails
    * @property {Issuer} issuer
@@ -149,16 +172,17 @@ export const start = async (zcf, privateArgs, baggage) => {
         setAirdropWaker: M.call().returns(M.promise()),
       }),
     },
-    (claimWindow, hash, claimeeStore, internalPurse, timer) => ({
-      claimWindowTimeframe: claimWindow,
-      rootHash: hash,
-      claimedUsersStore: claimeeStore,
-      internalPurse,
-      totalTokensClaimed: 0n,
-      timer,
-      distributionConfig: privateArgs.distributionSchedule,
-      currentEpoch: privateArgs.distributionSchedule[0],
-    }),
+    (claimWindow, hash, claimeeStore, internalPurse) => {
+      return {
+        claimWindowTimeframe: claimWindow,
+        rootHash: hash,
+        claimedUsersStore: claimeeStore,
+        internalPurse,
+        totalTokensClaimed: 0n,
+        distributionSchedule,
+        currentEpoch: distributionSchedule[0],
+      };
+    },
     {
       helpers: {
         createPurse() {
@@ -168,28 +192,10 @@ export const start = async (zcf, privateArgs, baggage) => {
           return this.state.internalPurse.getDepositFacet();
         },
         async setAirdropWaker() {
-          console.group('---------- inside setAirdropWaker----------');
-          console.log('------------------------');
-          console.log('this.state::', this.state.distributionConfig);
-          console.log('------------------------');
-          console.log('::');
-          console.log('------------------------');
-          console.groupEnd();
-          const claimWindowPk = makePromiseKit();
-          const currentTime = await E(this.state.timer).getCurrentTimestamp();
-
-          await E(this.state.timer).setWakeup(
-            claimWindowTimeframe,
-            makeWaker('airdropWaker', timestamp => {
-              console.log('time has resolved!!!', { timestamp });
-
-              // zcf.shutdown('Airdrop claim window has expired.');
-              claimWindowPk.resolve({
-                message: 'claim period has ended',
-                timestamp,
-              });
-
-              this.facets.helpers.getClaimPeriodP();
+          await E(contractTimer).setWakeup(
+            privateArgs.claimWindowStartTime,
+            makeWaker('airdropExpirationWaker', () => {
+              // burn tokens from purse
             }),
           );
         },
@@ -208,19 +214,20 @@ export const start = async (zcf, privateArgs, baggage) => {
           console.log('::');
           console.log('------------------------');
           console.groupEnd();
-          /** @param {ZCFSeat} creator */
+
+          /** @type {OfferHandler} */
           const startAirdropHandler = async (seat, offerArgs) => {
-            console.log('inside startAirdropHandler', { offerArgs });
-            this.state.internalPurse.deposit(
-              airdropPurse.withdraw(airdropPurse.getCurrentAmount()),
-            );
+            const {
+              give: { Deposit },
+            } = seat.getProposal();
+            atomicRearrange(zcf, harden([[seat, contractSeat, { Deposit }]]));
 
             console.log(
-              'THIS.STATE.currentEpochw',
-              this.state.currentEpoch,
-              'Internal Depsoit Facet has current amount',
-              this.state.internalPurse.getCurrentAmount(),
+              'inside startAirdropHandler',
+              contractSeat.getCurrentAllocation(),
             );
+
+            seat.exit();
             void this.facets.helpers.setAirdropWaker();
             return 'successfully opened claiming window';
           };
@@ -269,20 +276,26 @@ export const start = async (zcf, privateArgs, baggage) => {
           console.log('-----------------------');
         },
         async claim(userProof) {
+          console.group('---------- inside claim----------');
+          console.log('------------------------');
+          console.log('this.state::', this.state);
+          console.log('------------------------');
+          console.log('this.state.dis::', this.state.distributionConfig);
+          console.log('------------------------');
+          console.groupEnd();
           // 1. lookup for key
           assert(
             this.state.claimedUsersStore.has(userProof),
             CLAIM_MESSAGES.INELIGIBLE_ACCOUNT_ERROR,
           );
-          const { issuer, brand } = this.state.airdropIssuerDetails;
 
-          const purse = await E(issuer).makeEmptyPurse();
+          const purse = await E(AirdropIssuer).makeEmptyPurse();
           // console.group('### inside claim method ###');
           // console.log('---------------------------');
           // console.log('purse:::', { purse });
           // console.log('---------------------------');
           await E(airdropPurse)
-            .withdraw(AmountMath.make(brand, 2_000n))
+            .withdraw(AmountMath.make(AirdropBrand, 2_000n))
             .then(response => E(purse).deposit(response));
 
           // console.log('payment::::', { payout });
@@ -317,7 +330,7 @@ export const start = async (zcf, privateArgs, baggage) => {
       rootHash,
       claimedUsersStore,
       terms.emptyPurse,
-      claimWindowTimer,
+      contractTimer,
     ),
   );
   return harden({
