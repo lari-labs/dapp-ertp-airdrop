@@ -44,18 +44,6 @@
     jsesc "^2.5.1"
     source-map "^0.5.0"
 
-"@agoric/base-zone@^0.1.0":
-  version "0.1.1-orchestration-dev-096c4e8.0"
-  resolved "https://registry.yarnpkg.com/@agoric/base-zone/-/base-zone-0.1.1-orchestration-dev-096c4e8.0.tgz#5548b62bdcfb9d8eb51b71aa48547ade2dba0dc8"
-  integrity sha512-MHxIin0Ox3wBwZCqtbveIpVvg4ZS9lYX0YM0Ixlo7f4Mm0y30/+vyxCqmNLSelY67MWX21NKnTzDYW4xAA1zAw==
-  dependencies:
-    "@agoric/store" "0.9.3-orchestration-dev-096c4e8.0+096c4e8"
-    "@endo/common" "^1.1.0"
-    "@endo/exo" "^1.2.1"
-    "@endo/far" "^1.0.4"
-    "@endo/pass-style" "^1.2.0"
-    "@endo/patterns" "^1.2.0"
-
 "@agoric/cache@^0.3.2":
   version "0.3.2"
   resolved "https://registry.yarnpkg.com/@agoric/cache/-/cache-0.3.2.tgz#19c3576b72084c3b2409fa4b2fd8f534531c0788"
@@ -611,16 +599,6 @@
     "@endo/eventual-send" "0.17.2"
     "@endo/import-bundle" "0.3.4"
     "@endo/marshal" "0.8.5"
-
-"@agoric/store@0.9.3-orchestration-dev-096c4e8.0+096c4e8":
-  version "0.9.3-orchestration-dev-096c4e8.0"
-  resolved "https://registry.yarnpkg.com/@agoric/store/-/store-0.9.3-orchestration-dev-096c4e8.0.tgz#d1df059cc47b90616e6fa073f5e08111645a0261"
-  integrity sha512-FKoXAFuvDQz+EBCppidRQZY4QIuDbBEIqAzrIFikiTTcx9NFGB3k1oByFBgOeeYF50dUFBvS7ZtKe0DThd1Jsg==
-  dependencies:
-    "@endo/exo" "^1.2.1"
-    "@endo/marshal" "^1.3.0"
-    "@endo/pass-style" "^1.2.0"
-    "@endo/patterns" "^1.2.0"
 
 "@agoric/store@^0.9.2":
   version "0.9.2"
@@ -1837,15 +1815,6 @@
   resolved "https://registry.yarnpkg.com/@endo/cjs-module-analyzer/-/cjs-module-analyzer-0.2.35.tgz#0de39d2306bba5671e121efa091bf6cb9990f11e"
   integrity sha512-Ldr1auybH9AzrR/WV6bzP4aLRpv8CCl98mv0IAui4uQmmFOPOGchshyBfpiDF5XMKM6wh7z0VgmvmydQ5/7AHQ==
 
-"@endo/common@^1.1.0":
-  version "1.2.0"
-  resolved "https://registry.yarnpkg.com/@endo/common/-/common-1.2.0.tgz#722f67f49c4f8ad16166e0993ff1284fe3e390fd"
-  integrity sha512-lCMSyHqjSxbrg9u0F3pEOomjP2UN73UNwthozeyVvxlCxSLg24CsSItMmgzfG8c4JVaL58UGaUyXWUJvtfWPJg==
-  dependencies:
-    "@endo/errors" "^1.2.0"
-    "@endo/eventual-send" "^1.2.0"
-    "@endo/promise-kit" "^1.1.0"
-
 "@endo/compartment-mapper@0.8.4", "@endo/compartment-mapper@^0.8.4":
   version "0.8.4"
   resolved "https://registry.yarnpkg.com/@endo/compartment-mapper/-/compartment-mapper-0.8.4.tgz#afae6a4dfc64dff7082e90d7f215a072fb0a9b85"
@@ -1861,13 +1830,6 @@
   resolved "https://registry.yarnpkg.com/@endo/env-options/-/env-options-1.1.1.tgz#eee630f8eff01580ec49e0dedcb1b6cef05d89a4"
   integrity sha512-uCwlJ8Vkndx/VBBo36BdYHdxSoQPy7ZZpwyJNfv86Rh4B1IZfqzCRPf0u0mPgJdzOr7lShQey60SuYwoMSZ9Xg==
 
-"@endo/errors@^1.2.0":
-  version "1.2.0"
-  resolved "https://registry.yarnpkg.com/@endo/errors/-/errors-1.2.0.tgz#015dfdf60cc9c12ff27e69d73e1eb41af617318c"
-  integrity sha512-dY5EeMiKKyx+yDKoOYDrmypcrPyaBbqhK+YW6Ipdq2ctfg9e5drdfLg7UHWNdkk6+nvgdHS4QLUM5H/OHDtU+g==
-  dependencies:
-    ses "^1.4.0"
-
 "@endo/eslint-plugin@^0.5.2":
   version "0.5.2"
   resolved "https://registry.yarnpkg.com/@endo/eslint-plugin/-/eslint-plugin-0.5.2.tgz#835d22e9ff17d9935f7f565e50a21ef07aa92ca2"
@@ -1878,12 +1840,12 @@
     tsutils "~3.21.0"
     typescript "~5.2.2"
 
-"@endo/eventual-send@0.17.2", "@endo/eventual-send@^0.17.2", "@endo/eventual-send@^0.17.5", "@endo/eventual-send@^1.2.0":
+"@endo/eventual-send@0.17.2", "@endo/eventual-send@^0.17.2", "@endo/eventual-send@^0.17.5":
   version "0.17.2"
   resolved "https://registry.yarnpkg.com/@endo/eventual-send/-/eventual-send-0.17.2.tgz#c8710d557c2f57723be05fe99e941cd893acc5d2"
   integrity sha512-nux02l2yYXXUeUA2PigOO1K0gbVVMYx3prfYrW/G7Ny6PiDLtOyaeMWwKQwFTgJV2yAkOfvycr4LC1+tm7hu/Q==
 
-"@endo/exo@0.2.2", "@endo/exo@^0.2.2", "@endo/exo@^1.2.1":
+"@endo/exo@0.2.2", "@endo/exo@^0.2.2":
   version "0.2.2"
   resolved "https://registry.yarnpkg.com/@endo/exo/-/exo-0.2.2.tgz#eeebe3eeb40dcf9b409fddf8d5ff73821b470515"
   integrity sha512-4787jRJe7nQLV02mCCd1fQ8Ai25ParaIzLBUrxl7UKtsP98LcTlQKAON+OQmnSbV6jjXINa/wHdUeoi8/0xZDA==
@@ -1891,7 +1853,7 @@
     "@endo/far" "^0.2.18"
     "@endo/patterns" "^0.2.2"
 
-"@endo/far@0.2.18", "@endo/far@^0.2.18", "@endo/far@^0.2.22", "@endo/far@^0.2.3", "@endo/far@^1.0.4":
+"@endo/far@0.2.18", "@endo/far@^0.2.18", "@endo/far@^0.2.22", "@endo/far@^0.2.3":
   version "0.2.18"
   resolved "https://registry.yarnpkg.com/@endo/far/-/far-0.2.18.tgz#8d8ca8ac1f7c4b57871e55c2c2f06c8e4fcf3839"
   integrity sha512-NJPz5x11AOsFgxZNSIW4+llQtSUNQtcYCrvxpMwhofti3hncMjhIiUUrMVggw99pdHNmXEBr0gl16H3n/1X0sw==
@@ -1924,7 +1886,7 @@
   dependencies:
     ses "^0.18.4"
 
-"@endo/marshal@0.8.5", "@endo/marshal@^0.8.5", "@endo/marshal@^0.8.9", "@endo/marshal@^1.3.0":
+"@endo/marshal@0.8.5", "@endo/marshal@^0.8.5", "@endo/marshal@^0.8.9":
   version "0.8.5"
   resolved "https://registry.yarnpkg.com/@endo/marshal/-/marshal-0.8.5.tgz#c1a10ed4d9b37ee7444d314d8dec9a9a96728d64"
   integrity sha512-oj2Ag/TlkoMPv8m00fjoa1uWPgDwm5w8nYUU0DPqaCLfTNGRe8a8s7kYDPbv+sQdiQbkZ1RgUQjdyr/O2Mvs+A==
@@ -1948,7 +1910,7 @@
     "@endo/stream" "^0.3.25"
     ses "^0.18.4"
 
-"@endo/pass-style@0.1.3", "@endo/pass-style@^0.1.3", "@endo/pass-style@^1.2.0":
+"@endo/pass-style@0.1.3", "@endo/pass-style@^0.1.3":
   version "0.1.3"
   resolved "https://registry.yarnpkg.com/@endo/pass-style/-/pass-style-0.1.3.tgz#951056a2869b04f2aab0928b61a91ae7252ddbe4"
   integrity sha512-V2FLPBUJXsJYWjMSoZW2IopOuggEX14pm8AHfOVXUceF3uvHbdJj7qwKAuIIOhPApZ/TV+6nWYi86eb393Ic2w==
@@ -1956,7 +1918,7 @@
     "@endo/promise-kit" "^0.2.56"
     "@fast-check/ava" "^1.1.3"
 
-"@endo/patterns@0.2.2", "@endo/patterns@^0.2.2", "@endo/patterns@^0.2.5", "@endo/patterns@^1.2.0":
+"@endo/patterns@0.2.2", "@endo/patterns@^0.2.2", "@endo/patterns@^0.2.5":
   version "0.2.2"
   resolved "https://registry.yarnpkg.com/@endo/patterns/-/patterns-0.2.2.tgz#d4c4d63bf450477ed9a9cf194b4a8daa56fcb4f4"
   integrity sha512-rbS4BLRohZQhB+0aEPBoxmzOfOie9nAu8Qx55Fxe8xFQKS4k9acafeIYmKh9nvslEJISYQmogy5Lewm5mgdSjg==
@@ -1965,7 +1927,7 @@
     "@endo/marshal" "^0.8.5"
     "@endo/promise-kit" "^0.2.56"
 
-"@endo/promise-kit@0.2.56", "@endo/promise-kit@^0.2.56", "@endo/promise-kit@^1.1.0":
+"@endo/promise-kit@0.2.56", "@endo/promise-kit@^0.2.56":
   version "0.2.56"
   resolved "https://registry.yarnpkg.com/@endo/promise-kit/-/promise-kit-0.2.56.tgz#24ed3cf87af1eec65f4635643b7e67617b909e71"
   integrity sha512-eKlOg353jJCHwDAwXCajtcAiTTjGkd7oWBXniEEc97gZHK83MeB3pnGT2lhoeq3xzdNw3Xv2DDsowBI194AXeA==
@@ -7509,7 +7471,7 @@ serialize-error@^7.0.1:
   dependencies:
     type-fest "^0.13.1"
 
-ses@1.3.0, ses@^0.18.4, ses@^0.18.5, ses@^1.3.0, ses@^1.4.0:
+ses@1.3.0, ses@^0.18.4, ses@^0.18.5, ses@^1.3.0:
   version "1.3.0"
   resolved "https://registry.yarnpkg.com/ses/-/ses-1.3.0.tgz#4de8a2e740e5ff9e3cdbc4fd4a3574075c493f40"
   integrity sha512-TURVgXm/fs38N4iJfhU9NjUiNvnU7Z/G7gVjM17jD+nrChRzMmR57fbvAzbQeGCS8Cm0m1fBs0jYCqmU6GZ7Tg==

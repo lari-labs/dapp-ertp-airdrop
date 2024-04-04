@@ -4,16 +4,17 @@ import path from 'path';
 
 import bundleSource from '@endo/bundle-source';
 import { E } from '@endo/far';
-import { Far, GET_METHOD_NAMES } from '@endo/marshal';
+import { Far } from '@endo/marshal';
+
 
 import { makeStateMachine } from '@agoric/zoe/src/contractSupport/stateMachine.js';
 import buildManualTimer from '@agoric/zoe/tools/manualTimer.js';
 import { setup } from '../setupBasicMints.js';
 import { eventLoopIteration } from './utils.js';
+import { getTokenQuantity, getWindowLength } from '../../src/airdrop/helpers/objectTools.js';
 
 const filename = new URL(import.meta.url).pathname;
 const dirname = path.dirname(filename);
-
 
 /** @type {import('ava').TestFn} */
 const test = anyTest;
@@ -29,13 +30,6 @@ const defaultDistributionArray = [
   { windowLength: 864_000n, tokenQuantity: 1_500n },
   { windowLength: 864_000n, tokenQuantity: 750n },
 ];
-
-const composeM =
-  method =>
-  (...ms) =>
-    ms.reduce((f, g) => x => g(x)[method](f));
-
-const composePromises = composeM('then');
 
 const verify = address => assert(address[0] !== 'a');
 
@@ -83,13 +77,10 @@ test.beforeEach('setup', async t => {
     memeIssuer,
     memeKit,
     memes,
-    moola,
-    simoleans,
     bucksIssuer,
     bucksMint,
     bucks,
     zoe,
-    brands,
     vatAdminState,
   } = setup();
 
@@ -141,11 +132,8 @@ test.beforeEach('setup', async t => {
   // The spread will then mature at a low price, and carol will get paid.
 
   // Setup Alice
-  const aliceBucksPayment = bucksMint.mintPayment(bucks(300n));
   // Setup Bob
-  const bobBucksPurse = bucksIssuer.makeEmptyPurse();
   // Setup Carol
-  const carolBucksPurse = bucksIssuer.makeEmptyPurse();
 
   // // underlying is 2 Simoleans, strike range is 30-50 (doubled)
   // const terms = harden({
@@ -209,30 +197,14 @@ const simulateClaim = async (t, invitation, expectedPayout) => {
 
 test('zoe - ownable-Airdrop contract', async t => {
   const {
-    memes,
-    memeIssuer,
-    memeKit,
     schedule: distributionSchedule,
     timeIntervals,
     creatorFacet,
     publicFacet,
-    zoe,
-    invitationIssuer,
-    invitationBrand,
-    installation,
     timer,
   } = t.context;
 
   await E(creatorFacet).prepareAirdropCampaign();
-
-  const compose =
-    (...fns) =>
-    initialValue =>
-      fns.reduceRight((acc, val) => val(acc), initialValue);
-
-  const getProp = prop => obj => obj[prop];
-  const getWindowLength = compose(getProp('windowLength'), head);
-  const getTokenQuantity = compose(getProp('tokenQuantity'), head);
 
   t.deepEqual(
     head(timeIntervals),
@@ -250,7 +222,6 @@ test('zoe - ownable-Airdrop contract', async t => {
     'Contract state machine should update from initialized to prepared upon successful startup.',
   );
 
-  const methods = await E(creatorFacet)[GET_METHOD_NAMES]();
 
   await E(timer).advanceBy(ELEVEN_THOUSAND);
   t.deepEqual(
@@ -260,7 +231,7 @@ test('zoe - ownable-Airdrop contract', async t => {
   );
 
   let schedule = distributionSchedule;
-  const { timerBrand, absValue: absValueAtStartTime } =
+  const { absValue: absValueAtStartTime } =
     await E(timer).getCurrentTimestamp();
 
   const add = x => y => x + y;
@@ -275,7 +246,7 @@ test('zoe - ownable-Airdrop contract', async t => {
   t.deepEqual(
     createDistrubtionWakeupTime,
     ELEVEN_THOUSAND + TWENTY_THREE_HUNDRED + firstEpochLength,
-  );
+  );  
   t.is(bonusTokenQuantity, 10_000n);
 
   await simulateClaim(
@@ -305,7 +276,6 @@ test('zoe - ownable-Airdrop contract', async t => {
 
   t.log('inside test utilities');
 
-  const intervals = timeIntervals;
 
   t.deepEqual(
     head(timeIntervals),
@@ -319,19 +289,3 @@ test('zoe - ownable-Airdrop contract', async t => {
     add(3_000n)(ONE_THOUSAND),
   );
 });
-
-const testInterval = async (t, timer, array = defaultIntervals) => {
-  const t0 = await E(timer).getCurrentTimestamp();
-  await E(timer).advanceBy(head(intervals));
-  const t1 = await E(timer).getCurrentTimestamp();
-  array = tail(array);
-  await E(timer).advanceBy(head(intervals));
-  const t2 = await E(timer).getCurrentTimestamp();
-  array = tail(array);
-  await E(timer).advanceBy(head(intervals));
-  const t3 = await E(timer).getCurrentTimestamp();
-  return [t0, t1, t2, t3];
-};
-
-test.todo('test payouts against timer-based distribution schedule');
-test.todo('conduct exhaustive state transition tests');

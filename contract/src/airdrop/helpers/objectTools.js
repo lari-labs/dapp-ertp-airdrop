@@ -20,3 +20,28 @@ export const mapValues = (obj, f) =>
 
 /** @type {<X, Y>(xs: X[], ys: Y[]) => [X, Y][]} */
 export const zip = (xs, ys) => xs.map((x, i) => [x, ys[i]]);
+
+
+const head = ([x, ...xs]) => x;
+
+const composeM =
+  method =>
+  (...ms) =>
+    ms.reduce((f, g) => x => g(x)[method](f));
+    
+const compose =
+(...fns) =>
+initialValue =>
+  fns.reduceRight((acc, val) => val(acc), initialValue);
+
+const getProp = prop => obj => obj[prop];
+const getWindowLength = compose(getProp('windowLength'), head);
+const getTokenQuantity = compose(getProp('tokenQuantity'), head);
+
+export {
+  compose,
+  getProp,
+  getWindowLength,
+  getTokenQuantity,
+  head
+}
