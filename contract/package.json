@@ -13,7 +13,7 @@
     "start": "yarn docker:make clean start-contract print-key",
     "build": "agoric run scripts/build-contract-deployer.js",
     "test": "ava --verbose",
-    "test:isolated": "watch 'clear && npx ava ./test/test-*Airdrop.js -t | tap-color' ./src",
+    "test:isolated": "watch 'clear && npx ava ./test/airdropZone/test-*.js -t | tap-color' ./src",
     "lint": "eslint '**/*.js'",
     "lint:fix": "eslint --fix '**/*.js'"
   },
@@ -46,7 +46,6 @@
     "typescript": "~5.2.2"
   },
   "dependencies": {
-    "@agoric/base-zone": "^0.1.0",
     "@agoric/ertp": "^0.16.3-u12.0",
     "@agoric/store": "^0.9.2",
     "@agoric/vat-data": "0.5.3-u14.0",
@@ -88,7 +87,10 @@
     ],
     "ignorePatterns": [
       "./node_modules"
-    ]
+    ],
+    "rules": {
+      "no-void": "off"
+    }
   },
   "prettier": {
     "trailingComma": "all",
