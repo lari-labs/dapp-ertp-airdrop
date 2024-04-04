@@ -1,4 +1,3 @@
-/* eslint-disable no-void */
 import { M } from '@endo/patterns';
 import { makeDurableZone } from '@agoric/zone/durable.js';
 import { E } from '@endo/far';
@@ -6,17 +5,6 @@ import { Far } from '@endo/marshal';
 import { AmountMath } from '@agoric/ertp';
 import { TimeMath, TimestampShape } from '@agoric/time';
 import '../../types.js'
-
-const head = ([x, ...xs]) => x;
-
-const compose =
-  (...fns) =>
-  initialValue =>
-    fns.reduceRight((acc, val) => val(acc), initialValue);
-
-const getProp = prop => obj => obj[prop];
-const getWindowLength = compose(getProp('windowLength'), head);
-
 
 /**
  * @typedef {object} EpochDetails
@@ -38,19 +26,15 @@ const makeWaker = (name, func) => {
   });
 };
 
-const createWakeup = async (timer, wakeUpTime, timeWaker, cancelTokenMaker) => {
-  const cancelToken = cancelTokenMaker();
-  await E(timer).setWakeup(wakeUpTime, timeWaker, cancelToken);
-};
+// const createWakeup = async (timer, wakeUpTime, timeWaker, cancelTokenMaker) => {
+//   const cancelToken = cancelTokenMaker();
+//   await E(timer).setWakeup(wakeUpTime, timeWaker, cancelToken);
+// };
 const makeCancelTokenMaker = name => {
   let tokenCount = 1;
 
   return () => Far(`cancelToken-${name}-${(tokenCount += 1)}`, {});
 };
-
-const createPurse = issuer => issuer.makeEmptyPurse();
-
-const makeAmount = brand => x => AmountMath.make(brand, x);
 
 /**
  *
@@ -101,7 +85,6 @@ export const start = async (zcf, privateArgs, baggage) => {
   startupAssertion(airdropPurse, 'privateArgs.purse');
   startupAssertion(timer, 'privateArgs.timer');
 
-  console.log('ZONE API::::', { zone });
   const makeUnderlyingAirdropKit = zone.exoClassKit(
     'Airdrop Campaign',
     {
@@ -175,7 +158,6 @@ export const start = async (zcf, privateArgs, baggage) => {
         async updateDistributionMultiplier(newEpochDetails) {
           const {
             facets,
-            state: { currentEpoch, currentEpochEndTime },
           } = this;
           const epochDetails = newEpochDetails;
 
@@ -205,40 +187,14 @@ export const start = async (zcf, privateArgs, baggage) => {
           );
         },
         async prepareAirdropCampaign() {
-          console.group('---------- inside prepareAirdropCampaign----------');
-          console.log('------------------------');
-          console.log(
-            'this.state.distributionSchedulew::',
-            await E(this.state.dsm).getStatus(),
-          );
-          console.log('------------------------');
-          console.log('this.state.status::', this.state.dsm);
-          console.log('------------------------');
-          console.log(
-            'this.state.currentCancelToken::',
-            this.state.currentCancelToken,
-          );
+      
           this.state.currentCancelToken = cancelTokenMaker();
-
-          // void E(timer).setWakeup(
-          //   startTime,
-          //   Far('Waker', {
-          //     wake(ts) {
-          //       handleStateTransition(ts);
-          //     },
-          //   }),
-          //   this.state.currentCancelToken,
-          // );
           const {
             facets,
             state: {
               dsm: { transitionTo },
             },
           } = this;
-          const startTimestamp = TimeMath.absValue(startTime);
-          console.log('------------------------');
-          console.log('startTimestamp::', { startTimestamp });
-          console.log('------------------------');
           console.groupEnd();
           await E(timer).setWakeup(
             TimeMath.absValue(startTime),
