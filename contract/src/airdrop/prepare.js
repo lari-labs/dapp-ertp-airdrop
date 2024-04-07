@@ -2,39 +2,22 @@ import { M } from '@endo/patterns';
 import { makeDurableZone } from '@agoric/zone/durable.js';
 import { E } from '@endo/far';
 import { Far } from '@endo/marshal';
-import { AmountMath } from '@agoric/ertp';
-import { TimeMath, TimestampShape } from '@agoric/time';
-import '../../types.js'
+import { AmountMath, IssuerShape, PurseShape } from '@agoric/ertp';
+import { isNat } from '@endo/nat';
+import { TimeMath } from '@agoric/time';
+import '@agoric/ertp/src/types.js';
+import '@agoric/zoe/exported.js';
+import './types.js'
+import { TimerShape } from '@agoric/zoe/src/typeGuards';
+import { makeStateMachine } from '@agoric/zoe/src/contractSupport/stateMachine.js';
+import { makeWaker } from './helpers/time.js';
+import { makeCancelTokenMaker, startupAssertion } from './helpers/validation.js';
+import { Nat } from './adts/index.js';
 
-/**
- * @typedef {object} EpochDetails
- * @property {bigint} windowLength Length of epoch in seconds. This value is used by the contract's timerService to schedule a wake up that will fire once all of the seconds in an epoch have elapsed
- * @property {bigint} earlyClaimBonus The total number of tokens recieved by each user who claims during a particular epoch.
- * @property {bigint} index The index of a particular epoch.
- * @property {number} inDays Length of epoch formatted in total number of days
- */
-
-const startupAssertion = (arg, keyName) =>
-  assert(
-    arg,
-    `Contract has been started without required property: ${keyName}.`,
-  );
-
-const makeWaker = (name, func) => {
-  return Far(name, {
-    wake: timestamp => func(timestamp),
-  });
-};
-
-// const createWakeup = async (timer, wakeUpTime, timeWaker, cancelTokenMaker) => {
-//   const cancelToken = cancelTokenMaker();
-//   await E(timer).setWakeup(wakeUpTime, timeWaker, cancelToken);
-// };
-const makeCancelTokenMaker = name => {
-  let tokenCount = 1;
-
-  return () => Far(`cancelToken-${name}-${(tokenCount += 1)}`, {});
-};
+export const privateArgsShape = harden({
+  purse: PurseShape,
+  timer: TimerShape
+})
 
 /**
  *
@@ -60,27 +43,24 @@ export const start = async (zcf, privateArgs, baggage) => {
   const {
     AirdropUtils,
     startTime,
+    initialState,
+    stateTransitions,
+    states,
+    schedule: distributionSchedule,
     basePayoutQuantity,
-    brands: { Token: tokenBrand },
     issuers: { Token: tokenIssuer },
   } = terms;
 
-  const createAmount = x => AmountMath.make(tokenBrand, x);
+  const createAmount = x => AmountMath.make(tokenIssuer.getBrand(), x);
 
   assert(startTime > 0n, 'startTime must be a BigInt larger than 0n.');
-  const claimedAccountsStore = zone.setStore('claimed users', {
-    durable: true,
-  });
-  const [{ stateMachine, states }, distributionSchedule, verify] =
-    await Promise.all([
-      E(AirdropUtils).getStateMachine(),
-      E(AirdropUtils).getSchedule(),
-      E(AirdropUtils).getVerificationFn(),
-    ]);
-
+  const claimedAccountsStore = zone.setStore('claimed users'); const contractStateStore = zone.setStore('contract status');
+  
+  const stateMachine = makeStateMachine(initialState, stateTransitions)
+  console.log('StateMachine:::', { states, stateMachine, stateTransitions, status: stateMachine.getStatus()})
   const cancelTokenMaker = makeCancelTokenMaker('airdrop-campaign');
-  await stateMachine.transitionTo(states.PREPARED);
-  console.log({ stateMachine, states });
+  stateMachine.transitionTo(states.PREPARED);
+  console.log({ stateMachine, stateTransitions });
   const { purse: airdropPurse, timer } = privateArgs;
   startupAssertion(airdropPurse, 'privateArgs.purse');
   startupAssertion(timer, 'privateArgs.timer');
@@ -89,7 +69,7 @@ export const start = async (zcf, privateArgs, baggage) => {
     'Airdrop Campaign',
     {
       helper: M.interface('Helper', {
-        makeAmountForClaimer: M.call().returns(M.any()),
+        combineNaturalNumbers: M.call().returns(M.nat()),
         cancelTimer: M.call().returns(M.promise()),
         getDistributionEpochDetails: M.call().returns(M.record()),
         updateDistributionMultiplier: M.call(M.any()).returns(M.promise()),
@@ -101,16 +81,15 @@ export const start = async (zcf, privateArgs, baggage) => {
       }),
       claimer: M.interface('Claimer', {
         claim: M.call().returns(M.promise()),
-        view: M.call().returns(M.bigint()),
+        getAirdropTokenIssuer: M.call().returns(IssuerShape),
         getStatus: M.call().returns(M.string()),
       }),
     },
     /**
-     * @param {Purse} tokenPurse
-     * @param {Array} schedule
-     * @param stateMachine
-     * @param dsm
-     * @param store
+     * @param {import('@agoric/ertp/src/types.js').Purse} tokenPurse
+     * @param {[EpochDetails]} schedule
+     * @param {import('@endo/marshal').RemotableObject} dsm
+     * @param {import('@endo/patterns').CopySet} store
      */
     (tokenPurse, schedule, dsm, store) => ({
       currentCancelToken: null,
@@ -120,22 +99,21 @@ export const start = async (zcf, privateArgs, baggage) => {
       basePayout: basePayoutQuantity,
       earlyClaimBonus: schedule[0].tokenQuantity,
       internalPurse: tokenPurse,
-      claimedAccounts: store,
-      dsm: Far('state machine', {
-        getStatus() {
-          return dsm.getStatus();
-        },
-        transitionTo(state) {
-          return dsm.transitionTo(state);
-        },
-      }),
+      claimedAccounts: store
     }),
     {
       helper: {
-        makeAmountForClaimer() {
+        combineNaturalNumbers() {
           const { earlyClaimBonus, basePayout } = this.state;
-
-          return createAmount(earlyClaimBonus + basePayout);
+          assert(
+            isNat(earlyClaimBonus),
+            'earlyClaimBonus must be a natural number.',
+          );
+          assert(
+            isNat(basePayout),
+            'basePayout must be a natural number.',
+          );
+          return Nat(earlyClaimBonus).concat(Nat(basePayout)).value
         },
         async cancelTimer() {
           await E(timer).cancel(this.state.currentCancelToken);
@@ -144,21 +122,18 @@ export const start = async (zcf, privateArgs, baggage) => {
           return this.state.distributionSchedule[this.state.currentEpoch];
         },
         updateEpochDetails(absTime, epochIdx) {
-       
           const newEpochDetails = this.state.distributionSchedule[epochIdx];
 
           this.state.currentEpochEndTime =
             absTime + newEpochDetails.windowLength;
-        
+
           this.state.earlyClaimBonus =
             this.facets.helper.getDistributionEpochDetails().tokenQuantity;
 
-           this.facets.helper.updateDistributionMultiplier(newEpochDetails);
+          this.facets.helper.updateDistributionMultiplier(newEpochDetails);
         },
         async updateDistributionMultiplier(newEpochDetails) {
-          const {
-            facets,
-          } = this;
+          const { facets } = this;
           const epochDetails = newEpochDetails;
 
           const { absValue } = await E(timer).getCurrentTimestamp();
@@ -183,23 +158,19 @@ export const start = async (zcf, privateArgs, baggage) => {
       creator: {
         createPayment() {
           return this.state.internalPurse.withdraw(
-            this.facets.helper.makeAmountForClaimer(),
+            createAmount(this.facets.helper.combineNaturalNumbers()),
           );
         },
         async prepareAirdropCampaign() {
-      
           this.state.currentCancelToken = cancelTokenMaker();
           const {
-            facets,
-            state: {
-              dsm: { transitionTo },
-            },
+            facets
           } = this;
           console.groupEnd();
           await E(timer).setWakeup(
             TimeMath.absValue(startTime),
             makeWaker('claimWindowOpenWaker', ({ absValue }) => {
-              transitionTo(states.OPEN);
+              stateMachine.transitionTo(states.OPEN);
               facets.helper.updateEpochDetails(
                 absValue,
                 this.state.currentEpoch,
@@ -211,15 +182,15 @@ export const start = async (zcf, privateArgs, baggage) => {
       },
       claimer: {
         getStatus() {
-          return this.state.dsm.getStatus();
+          return stateMachine.getStatus();
         },
-        view() {
+        getAirdropTokenIssuer() {
           const { count } = this.state;
           return count;
         },
         claim() {
           assert(
-            this.facets.claimer.getStatus() === states.OPEN,
+            this.facets.claimer.getStatus() ===  states.OPEN,
             'Claim attempt failed.',
           );
           const airdropPayment = this.facets.creator.createPayment();
@@ -227,22 +198,23 @@ export const start = async (zcf, privateArgs, baggage) => {
           /**
            * @param payment
            */
-          const claimHandler = payment => 
-          /**
-           * @param {UserSeat} seat
-           * @param offerArgs
-           */
-          async (seat, offerArgs) => {
-            // const payoutPurse = createPurse(tokenIssuer);
+          const claimHandler =
+            payment =>
+              /**
+               * @param {UserSeat} seat
+               * @param offerArgs
+               */
+              async (seat, offerArgs) => {
+                // const payoutPurse = createPurse(tokenIssuer);
 
-            // payoutPurse.deposit(payment);
+                // payoutPurse.deposit(payment);
 
-            seat.exit();
-            return harden({
-              message: 'Here is your payout purse - enjoy!',
-              airdrop: payment,
-            });
-          };
+                seat.exit();
+                return harden({
+                  message: 'Here is your payout purse - enjoy!',
+                  airdrop: payment,
+                });
+              };
           return zcf.makeInvitation(
             claimHandler(airdropPayment),
             'airdrop claim handler',

@@ -54,6 +54,7 @@
     "@agoric/zoe": "0.26.3-u14.0",
     "@agoric/zone": "0.2.3-u14.0",
     "@endo/far": "^0.2.22",
+    "@endo/nat": "5.0.6",
     "@endo/marshal": "^0.8.9",
     "@endo/patterns": "^0.2.5",
     "@endo/promise-kit": "0.2.56",

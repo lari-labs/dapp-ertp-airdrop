@@ -12,7 +12,9 @@ import buildManualTimer from '@agoric/zoe/tools/manualTimer.js';
 import { setup } from '../setupBasicMints.js';
 import { eventLoopIteration } from './utils.js';
 import { getTokenQuantity, getWindowLength } from '../../src/airdrop/helpers/objectTools.js';
+import { assertNatAssetKind } from '@agoric/zoe/src/contractSupport/zoeHelpers.js';
 
+assertNatAssetKind
 const filename = new URL(import.meta.url).pathname;
 const dirname = path.dirname(filename);
 
@@ -33,6 +35,22 @@ const defaultDistributionArray = [
 
 const verify = address => assert(address[0] !== 'a');
 
+/**
+ * @typedef {object} EpochDetails
+ * @property {bigint} windowLength Length of epoch in seconds. This value is used by the contract's timerService to schedule a wake up that will fire once all of the seconds in an epoch have elapsed
+ * @property {import('@agoric/ertp/src/types.js').NatValue} tokenQuantity The total number of tokens recieved by each user who claims during a particular epoch.
+ * @property {bigint} index The index of a particular epoch.
+ * @property {number} inDays Length of epoch formatted in total number of days
+ */
+
+
+/**
+ * Creates an array of epoch details for context.
+ * 
+ * @param {Array<{windowLength: bigint, tokenQuantity: import('@agoric/ertp/src/types.js').NatValue}>} [defaultDistributionArray] The default value for the array parameter, if not provided.
+ * @param array
+ * @returns {EpochDetails[]} An array containing the epoch details.
+ */
 export const createDistributionConfig = (array = defaultDistributionArray) =>
   array.map(({ windowLength, tokenQuantity }, index) =>
     harden({
@@ -88,6 +106,14 @@ test.beforeEach('setup', async t => {
   const AIRDROP_PAYMENT = memeMint.mintPayment(TOTAL_SUPPLY);
   const AIRDROP_PURSE = memeIssuer.makeEmptyPurse();
   AIRDROP_PURSE.deposit(AIRDROP_PAYMENT);
+  const timer = harden(makeTimer(t.log, 0n));
+
+  await harden(AIRDROP_PURSE);
+  const isFrozen = x => Object.isFrozen(x);
+
+  t.deepEqual(isFrozen(AIRDROP_PURSE), true, 'Purse being passed into contract via privateArgs must be frozen.')
+  t.deepEqual(isFrozen(timer), true,'Timer being passed into contract via privateArgs must be frozen.')
+
   const invitationIssuer = await E(zoe).getInvitationIssuer();
   const invitationBrand = await E(invitationIssuer).getBrand();
 
@@ -96,7 +122,6 @@ test.beforeEach('setup', async t => {
   vatAdminState.installBundle('b1-ownable-Airdrop', bundle);
   /** @type {Installation<import('./ownable-airdrop.js').start>} */
   const installation = await E(zoe).installBundleID('b1-ownable-Airdrop');
-  const timer = makeTimer(t.log, 0n);
   const schedule = harden(createDistributionConfig());
   const instance = await E(zoe).startInstance(
     installation,
@@ -104,23 +129,12 @@ test.beforeEach('setup', async t => {
     harden({
       basePayoutQuantity: ONE_THOUSAND,
       startTime: 10_000n,
-      AirdropUtils: Far('AirdropUtils', {
-        makeAmount() {
-          return x => memes(x);
-        },
-        getSchedule() {
-          return schedule;
-        },
-        getVerificationFn() {
-          return x => verify(x);
-        },
-        getStateMachine() {
-          return { stateMachine, states: AIRDROP_STATES };
-        },
-      }),
+      schedule,
+      initialState: startState,
+      stateTransitions: allowedTransitions,
+      states: AIRDROP_STATES
     }),
     harden({
-      count: 3n,
       purse: AIRDROP_PURSE,
       timer,
     }),

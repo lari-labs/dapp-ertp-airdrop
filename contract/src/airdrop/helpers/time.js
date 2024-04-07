@@ -21,8 +21,14 @@ const makeCancelTokenMaker = name => {
   return () => Far(`cancelToken-${name}-${(tokenCount += 1)}`, {});
 };
 
+const makeWaker = (name, func) => {
+  return Far(name, {
+    wake: timestamp => func(timestamp),
+  });
+};
 export {
   makeCancelTokenMaker,
+  makeWaker,
   oneMinute,
   oneDay,
   oneWeek,
