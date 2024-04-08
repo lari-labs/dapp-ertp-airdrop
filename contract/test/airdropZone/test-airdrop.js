@@ -179,7 +179,7 @@ test.beforeEach('setup', async t => {
 
 const simulateClaim = async (t, invitation, expectedPayout) => {
   const { zoe, memeIssuer: tokenIssuer, memes } = t.context;
-  const claimInviation = await E(zoe).offer(invitation);
+  const claimSeat = await E(zoe).offer(invitation);
 
   /**
    * Description placeholder
@@ -191,7 +191,7 @@ const simulateClaim = async (t, invitation, expectedPayout) => {
    */
 
   /** @type {AirdropResult} */
-  const claimResult = await E(claimInviation).getOfferResult();
+  const claimResult = await E(claimSeat).getOfferResult();
 
   t.log('------------ testing claim capabilities -------');
   t.log('-----------------------------------------');
@@ -202,9 +202,11 @@ const simulateClaim = async (t, invitation, expectedPayout) => {
 
   t.deepEqual(claimResult.message, 'Here is your payout purse - enjoy!');
 
-  t.deepEqual(await E(tokenIssuer).isLive(claimResult.airdrop), true);
+  const claimPayment = await E(claimSeat).getPayout('Payment')
+
+  t.deepEqual(await E(tokenIssuer).isLive(claimPayment), true);
   t.deepEqual(
-    await E(tokenIssuer).getAmountOf(claimResult.airdrop),
+    await E(tokenIssuer).getAmountOf(claimPayment),
     memes(expectedPayout),
   );
 };
