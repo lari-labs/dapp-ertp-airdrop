@@ -68,6 +68,7 @@ export const start = async (zcf, privateArgs, baggage) => {
     states,
     schedule: distributionSchedule,
     basePayoutQuantity,
+    brands: { Token: tokenBrand },
     issuers: { Token: tokenIssuer },
   } = zcf.getTerms();
 
