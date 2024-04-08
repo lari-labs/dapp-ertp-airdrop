@@ -1,8 +1,7 @@
-import { M } from '@endo/patterns';
+import { M, mustMatch } from '@endo/patterns';
 import { makeDurableZone } from '@agoric/zone/durable.js';
 import { E } from '@endo/far';
-import { AmountMath, IssuerShape, PurseShape } from '@agoric/ertp';
-import { isNat } from '@endo/nat';
+import { AmountMath, AmountShape, IssuerShape, PurseShape } from '@agoric/ertp';
 import { TimeMath } from '@agoric/time';
 import { TimerShape } from '@agoric/zoe/src/typeGuards';
 import { depositToSeat } from '@agoric/zoe/src/contractSupport/zoeHelpers.js';
@@ -10,17 +9,34 @@ import { makeWaker } from './helpers/time.js';
 import {
   handleFirstIncarnation,
   makeCancelTokenMaker,
-  startupAssertion,
 } from './helpers/validation.js';
-import { Nat } from './adts/index.js';
 import { makeStateMachine } from './helpers/stateMachine.js';
 import './types.js';
 import '../../types.js';
+import { createClaimSuccessMsg } from './helpers/messages.js';
+import { getTokenQuantity } from './helpers/objectTools.js';
 
-export const privateArgsShape = harden({
+const privateArgsShape = harden({
   purse: PurseShape,
   timer: TimerShape,
 });
+
+const customTermsShape = harden({
+  startTime: M.gte(0n),
+  initialState: M.string(),
+  stateTransitions: M.arrayOf(M.array()),
+  states: M.record(),
+  schedule: M.array(),
+  basePayoutQuantity: AmountShape,
+});
+
+/** @type {import('../../types.js').ContractMeta} */
+export const meta = {
+  customTermsShape,
+  privateArgsShape,
+  upgradability: 'canUpgrade',
+};
+
 /**
  *
  * @typedef {object} ContractTerms
@@ -43,8 +59,6 @@ export const start = async (zcf, privateArgs, baggage) => {
   const zone = makeDurableZone(baggage, 'rootZone');
 
   const { purse: airdropPurse, timer } = privateArgs;
-  startupAssertion(airdropPurse, 'privateArgs.purse');
-  startupAssertion(timer, 'privateArgs.timer');
 
   /** @type {ContractTerms} */
   const {
@@ -54,19 +68,8 @@ export const start = async (zcf, privateArgs, baggage) => {
     states,
     schedule: distributionSchedule,
     basePayoutQuantity,
-    brands: { Token: tokenBrand },
     issuers: { Token: tokenIssuer },
   } = zcf.getTerms();
-
-  // Assert required customTerms properties.
-  startupAssertion(startTime, 'customTerms.startTime');
-  startupAssertion(initialState, 'customTerms.initialState');
-  startupAssertion(stateTransitions, 'customTerms.stateTransitions');
-  startupAssertion(states, 'customTerms.states');
-  startupAssertion(distributionSchedule, 'customTerms.schedule');
-  startupAssertion(basePayoutQuantity, 'customTerms.basePayoutQuantity');
-
-  assert(startTime > 0n, 'startTime must be a BigInt larger than 0n.');
 
   const claimedAccountsStore = zone.setStore('claimed users');
   // TODO: Inquire about handling state machine operations using a `Map` or `Set` from the Zone API.
@@ -80,7 +83,7 @@ export const start = async (zcf, privateArgs, baggage) => {
     'Airdrop Campaign',
     {
       helper: M.interface('Helper', {
-        combineNaturalNumbers: M.call().returns(M.nat()),
+        combineAmounts: M.call().returns(AmountShape),
         cancelTimer: M.call().returns(M.promise()),
         updateDistributionMultiplier: M.call(M.any()).returns(M.promise()),
         updateEpochDetails: M.call(M.any(), M.any()).returns(),
@@ -106,20 +109,22 @@ export const start = async (zcf, privateArgs, baggage) => {
       distributionSchedule: schedule,
       currentEpochEndTime: 0n,
       basePayout: basePayoutQuantity,
-      earlyClaimBonus: schedule[0].tokenQuantity,
+      earlyClaimBonus: getTokenQuantity(schedule),
       internalPurse: tokenPurse,
       claimedAccounts: store,
     }),
     {
       helper: {
-        combineNaturalNumbers() {
+        combineAmounts() {
           const { earlyClaimBonus, basePayout } = this.state;
-          assert(
-            isNat(earlyClaimBonus),
-            'earlyClaimBonus must be a natural number.',
+          mustMatch(
+            earlyClaimBonus,
+            AmountShape,
+            'earlyClaimBonus must be an amount.',
           );
-          assert(isNat(basePayout), 'basePayout must be a natural number.');
-          return Nat(earlyClaimBonus).concat(Nat(basePayout)).value;
+          mustMatch(basePayout, AmountShape, 'basePayout must be an amount.');
+
+          return AmountMath.add(earlyClaimBonus, basePayout);
         },
         async cancelTimer() {
           await E(timer).cancel(this.state.currentCancelToken);
@@ -159,10 +164,7 @@ export const start = async (zcf, privateArgs, baggage) => {
       creator: {
         createPayment() {
           return this.state.internalPurse.withdraw(
-            AmountMath.make(
-              tokenBrand,
-              this.facets.helper.combineNaturalNumbers(),
-            ),
+            this.facets.helper.combineAmounts(),
           );
         },
         async prepareAirdropCampaign() {
@@ -195,32 +197,28 @@ export const start = async (zcf, privateArgs, baggage) => {
             stateMachine.getStatus() === states.OPEN,
             'Claim attempt failed.',
           );
-          const airdropPayment = this.facets.creator.createPayment();
-
           /**
            * @param {import('@agoric/ertp/src/types.js').Payment} payment
            */
           const claimHandler =
             payment =>
-            /**
-             * @param {UserSeat} seat
-             * @param offerArgs
-             */
+            // TODO: figure out type import issue.
+            // Unable to get [OfferHandler](https://github.com/Agoric/agoric-sdk/blob/c74c62863bb9de77e66f8d909058804912e72528/packages/zoe/src/contractFacet/types-ambient.d.ts#L214)
+            //
             async (seat, offerArgs) => {
-              // const payoutPurse = createPurse(tokenIssuer);
-
-              // payoutPurse.deposit(payment);
-              
               const amount = await E(tokenIssuer).getAmountOf(payment);
 
-              await depositToSeat(zcf, seat, { Payment: amount }, { Payment: payment})
+              await depositToSeat(
+                zcf,
+                seat,
+                { Payment: amount },
+                { Payment: payment },
+              );
               seat.exit();
-              return harden({
-                message: 'Here is your payout purse - enjoy!',
-              });
+              return createClaimSuccessMsg(amount);
             };
           return zcf.makeInvitation(
-            claimHandler(airdropPayment),
+            claimHandler(this.facets.creator.createPayment()),
             'airdrop claim handler',
           );
         },
