@@ -233,8 +233,9 @@ export const start = async (zcf, privateArgs, baggage) => {
     claimedAccountsStore,
   );
 
+  // transition from the "initial" state to "prepared" state following the success of `makeUnderlyingAirdropKit`.
   stateMachine.transitionTo(states.PREPARED);
-  contractStateStore;
+
   return harden({
     creatorFacet: creator,
     publicFacet: claimer,
