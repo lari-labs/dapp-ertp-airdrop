@@ -1,36 +1,4 @@
 /**
- * A Value consumed and produced by the Container `map's function.
- *
- * @typedef {any} Value
- */
-
-/**
- * @typedef {object} ADT
- * @property {function(function(Value): Value): ADT} map map transforms
- * @property {function(): string} toString Our custom stringification
- *   of the object.
- */
-
-/**
- * Creates a chainable container.
- *
- * This function allows us to chain map() invocations in a composable
- * way, and, if desired, unbox the value using fold().
- *
- * @sig Value -> ADT
- *
- * @param {Value} val
- * @returns {ADT}
- *
- * @example
- * Box('YODA')
- *   .map(s => s.toLowerCase())
- *   .map(s => s.split(''))
- *   .fold(s => s.join('-'))
- * // → 'y-o-d-a'
- */
-
-/**
  * @typedef {object} NatInstance
  * Represents a natural number with semigroup concatenation capabilities.
  *
