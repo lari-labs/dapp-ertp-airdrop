@@ -5,6 +5,7 @@ import { AmountMath, IssuerShape, PurseShape } from '@agoric/ertp';
 import { isNat } from '@endo/nat';
 import { TimeMath } from '@agoric/time';
 import { TimerShape } from '@agoric/zoe/src/typeGuards';
+import { depositToSeat } from '@agoric/zoe/src/contractSupport/zoeHelpers.js';
 import { makeWaker } from './helpers/time.js';
 import {
   handleFirstIncarnation,
@@ -209,11 +210,13 @@ export const start = async (zcf, privateArgs, baggage) => {
               // const payoutPurse = createPurse(tokenIssuer);
 
               // payoutPurse.deposit(payment);
+              
+              const amount = await E(tokenIssuer).getAmountOf(payment);
 
+              await depositToSeat(zcf, seat, { Payment: amount }, { Payment: payment})
               seat.exit();
               return harden({
                 message: 'Here is your payout purse - enjoy!',
-                airdrop: payment,
               });
             };
           return zcf.makeInvitation(
