@@ -1,3 +1,4 @@
+// @ts-check
 /* eslint-disable-next-line import/order */
 import { test as anyTest } from '../prepare-test-env-ava.js';
 import path from 'path';
@@ -13,16 +14,22 @@ import {
 } from '../../src/airdrop/helpers/objectTools.js';
 import { createClaimSuccessMsg } from '../../src/airdrop/helpers/messages.js';
 
+/** @import { Amount, AssetKind, Brand } from '@agoric/ertp/src/types.js'; */
 const filename = new URL(import.meta.url).pathname;
 const dirname = path.dirname(filename);
 
-/** @type {import('ava').TestFn} */
+/** @type {import('ava').TestFn<Awaited<ReturnType<makeTestContext>>>} */
 const test = anyTest;
 
 const root = `${dirname}/../../src/airdrop/prepare.js`;
 
 const defaultIntervals = [2_300n, 3_500n, 5_000n, 11_000n, 150_000n, 175_000n];
 
+/**
+ * The default value for the array parameter, if not provided.
+ *
+ * @type {Array<{windowLength: bigint, tokenQuantity: import('@agoric/ertp/src/types.js').NatValue}>}
+ */
 const defaultDistributionArray = [
   { windowLength: 159_200n, tokenQuantity: 10_000n },
   { windowLength: 864_000n, tokenQuantity: 6_000n },
@@ -45,8 +52,7 @@ export const createDistributionConfig =
   /**
    * Creates an array of epoch details for context.
    *
-   * @param {Array<{windowLength: bigint, tokenQuantity: import('@agoric/ertp/src/types.js').NatValue}>} [defaultDistributionArray] The default value for the array parameter, if not provided.
-   * @param array
+   * @param {Array<{windowLength: bigint, tokenQuantity: import('@agoric/ertp/src/types.js').NatValue}>} [array]
    * @returns {EpochDetails[]} An array containing the epoch details.
    */
   (array = defaultDistributionArray) =>
@@ -54,8 +60,8 @@ export const createDistributionConfig =
       harden({
         windowLength,
         tokenQuantity: AmountMath.make(tokenBrand, tokenQuantity),
-        index,
-        inDays: windowLength / 86_400n,
+        index: BigInt(index),
+        inDays: Number(windowLength / 86_400n),
       }),
     );
 
@@ -79,14 +85,17 @@ const allowedTransitions = [
   [EXPIRED, []],
 ];
 
+/** @type {<T>(x: T[]) => T} */
 const head = ([x] = []) => x;
+/** @type {<T>(xs: T[]) => T[]} */
 const tail = ([_, ...xs]) => xs;
 
 const ONE_THOUSAND = 1_000n;
 
 const makeTimer = (logFn, startTime) =>
   buildManualTimer(logFn, startTime, { eventLoopIteration });
-test.beforeEach('setup', async t => {
+
+const makeTestContext = async t => {
   const { memeMint, memeIssuer, memeKit, memes, zoe, vatAdminState } = setup();
 
   const TOTAL_SUPPLY = memes(10_000_000n);
@@ -118,6 +127,7 @@ test.beforeEach('setup', async t => {
   // Pack the contract.
   const bundle = await bundleSource(root);
   vatAdminState.installBundle('b1-ownable-Airdrop', bundle);
+  /** @type { Installation<typeof import('../../src/airdropCampaign.js').start> } */
   const installation = await E(zoe).installBundleID('b1-ownable-Airdrop');
   const schedule = harden(createMemeTokenDistributionSchedule());
   const instance = await E(zoe).startInstance(
@@ -156,7 +166,7 @@ test.beforeEach('setup', async t => {
   //   settlementAmount: bucks(300n),
   //   timer: manualTimer,
   // });
-  t.context = {
+  return {
     memeIssuer,
     memeKit,
     memes,
@@ -172,6 +182,10 @@ test.beforeEach('setup', async t => {
     bundle,
     schedule,
   };
+};
+
+test.beforeEach('setup', async t => {
+  t.context = await makeTestContext(t);
 });
 
 const simulateClaim = async (t, invitation, expectedPayout) => {
