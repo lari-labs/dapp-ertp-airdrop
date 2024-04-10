@@ -88,10 +88,7 @@
     ],
     "ignorePatterns": [
       "./node_modules"
-    ],
-    "rules": {
-      "no-void": "off"
-    }
+    ]
   },
   "prettier": {
     "trailingComma": "all",

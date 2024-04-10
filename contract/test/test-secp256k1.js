@@ -8,7 +8,10 @@ import { webcrypto } from 'node:crypto';
 import { hmac } from '@noble/hashes/hmac';
 import { sha256 } from '@noble/hashes/sha256';
 // @ts-ignore
-if (!globalThis.crypto) globalThis.crypto = webcrypto;
+
+// adopted from https://github.com/paulmillr/noble-hashes
+globalThis.crypto = webcrypto;
+
 secp.etc.hmacSha256Sync = (k, ...m) =>
   hmac(sha256, k, secp.etc.concatBytes(...m));
 secp.etc.hmacSha256Async = (k, ...m) =>

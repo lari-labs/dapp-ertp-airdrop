@@ -68,12 +68,13 @@ export const start = async (zcf, privateArgs, baggage) => {
     states,
     schedule: distributionSchedule,
     basePayoutQuantity,
-    brands: { Token: tokenBrand },
     issuers: { Token: tokenIssuer },
   } = zcf.getTerms();
 
   const claimedAccountsStore = zone.setStore('claimed users');
   // TODO: Inquire about handling state machine operations using a `Map` or `Set` from the Zone API.
+
+  // eslint-disable-next-line no-unused-vars
   const contractStateStore = zone.setStore('contract status');
 
   const stateMachine = makeStateMachine(initialState, stateTransitions);

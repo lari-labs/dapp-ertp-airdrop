@@ -1,10 +1,11 @@
 // @ts-check
 // eslint-disable-next-line import/order
-import { test as anyTest } from './airdropData/prepare-test-env-ava.js';
 import { createRequire } from 'module';
 import { E } from '@endo/far';
 import { AmountMath, AssetKind } from '@agoric/ertp/src/amountMath.js';
 import { makeIssuerKit } from '@agoric/ertp';
+import { makeCopyBagFromElements, makeCopySet } from '@endo/patterns';
+import { test as anyTest } from './airdropData/prepare-test-env-ava.js';
 import { makeWalletFactory } from './wallet-tools.js';
 import { Id, IO, Task } from '../src/airdrop/adts/monads.js';
 import { launcherLarry, starterSam } from './market-actors.js';
@@ -21,7 +22,6 @@ import { makeStableFaucet } from './power-tools/mintStable.js';
 import { makeClientMarshaller } from '../src/marshalTables.js';
 import { documentStorageSchema } from './airdropData/storageDoc.js';
 import '@agoric/store/exported.js';
-import { makeCopyBagFromElements, makeCopySet } from '@endo/patterns';
 import { createDistributionConfig } from './utils.js';
 
 const nodeRequire = createRequire(import.meta.url);
