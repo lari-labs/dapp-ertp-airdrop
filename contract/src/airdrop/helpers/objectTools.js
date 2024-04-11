@@ -2,7 +2,7 @@
 const { entries, fromEntries } = Object;
 
 /** @type { <T extends Record<string, ERef<any>>>(obj: T) => Promise<{ [K in keyof T]: Awaited<T[K]>}> } */
-export const allValues = async (obj) => {
+export const allValues = async obj => {
   const es = await Promise.all(
     entries(obj).map(async ([k, v]) => [k, await v]),
   );
@@ -38,10 +38,4 @@ const getProp = prop => obj => obj[prop];
 const getWindowLength = compose(getProp('windowLength'), head);
 const getTokenQuantity = compose(getProp('tokenQuantity'), head);
 
-export {
-  compose,
-  getProp,
-  getWindowLength,
-  getTokenQuantity,
-  head
-}
+export { compose, getProp, getWindowLength, getTokenQuantity, head };
