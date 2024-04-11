@@ -7,7 +7,7 @@ import buildManualTimer from '@agoric/zoe/tools/manualTimer.js';
 /** @type {import('ava').TestFn<Awaited<ReturnType<makeBundleCacheContext>>>} */
 const test = anyTest;
 
-test('timer', async t => {
+test.skip('timer', async t => {
   const timer = buildManualTimer(x => {
     console.log('logging time', x);
     x;

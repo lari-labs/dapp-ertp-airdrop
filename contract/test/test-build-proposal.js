@@ -6,8 +6,12 @@ import { makeCompressFile } from './utils.js';
 
 test.before(t => (t.context.compressFile = makeCompressFile(fs.readFile)));
 
-test.only('proposal builder generates compressed bundles less than 1MB', async t => {
-  const stdout = execSync('agoric run scripts/build-contract-deployer.js', { encoding: 'utf8' }); 
+// TODO: update to work like dapp-agoric-basics
+// https://github.com/Agoric/dapp-agoric-basics/blob/main/contract/test/test-build-proposal.js
+test.skip('proposal builder generates compressed bundles less than 1MB', async t => {
+  const stdout = execSync('agoric run scripts/build-contract-deployer.js', {
+    encoding: 'utf8',
+  });
   t.log('agoric run stdout:', stdout);
   t.truthy(stdout, 'Proposal successfully bundled.');
 

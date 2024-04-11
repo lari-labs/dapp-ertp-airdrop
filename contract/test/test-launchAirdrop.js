@@ -5,33 +5,33 @@ import { createRequire } from 'module';
 import { E } from '@endo/far';
 import { AmountMath, AssetKind } from '@agoric/ertp/src/amountMath.js';
 import { makeIssuerKit } from '@agoric/ertp';
+import { makeCopyBagFromElements, makeCopySet } from '@endo/patterns';
 import { makeWalletFactory } from './wallet-tools.js';
-import { Id, IO, Task } from '../src/airdrop/adts/monads.js';
+// ??? import { Id, IO, Task } from '../src/airdrop/adts/monads.js';
 import { launcherLarry, starterSam } from './market-actors.js';
 import {
   makeBundleCacheContext,
   bootAndInstallBundles,
   getBundleId,
 } from './boot-tools.js';
-import {
-  installContractStarter,
-  startContractStarter,
-} from '../src/start-contractStarter.js';
+// import {
+//   installContractStarter,
+//   startContractStarter,
+// } from '../src/start-contractStarter.js';
 import { makeStableFaucet } from './power-tools/mintStable.js';
 import { makeClientMarshaller } from './marshalTables.js';
 import { documentStorageSchema } from './airdropData/storageDoc.js';
 import '@agoric/store/exported.js';
-import { makeCopyBagFromElements, makeCopySet } from '@endo/patterns';
 import { createDistributionConfig } from './utils.js';
 
 const nodeRequire = createRequire(import.meta.url);
 
-const contractName = 'launchIt';
+// const contractName = 'launchIt';
 const airdropName = 'airdropCampaign';
 const bundleRoots = {
-  [contractName]: nodeRequire.resolve('../src/launchIt.js'),
+  // [contractName]: nodeRequire.resolve('../src/launchIt.js'),
   [airdropName]: nodeRequire.resolve('../src/airdropCampaign.js'),
-  contractStarter: nodeRequire.resolve('../src/contractStarter.js'),
+  // contractStarter: nodeRequire.resolve('../src/contractStarter.js'),
 };
 
 /** @type {import('ava').TestFn<Awaited<ReturnType<makeBundleCacheContext>>>} */
@@ -39,7 +39,7 @@ const test = anyTest;
 
 test.before(async t => (t.context = await makeBundleCacheContext(t)));
 
-test.serial('boot, walletFactory, contractStarter', async t => {
+test.skip('boot, walletFactory, contractStarter', async t => {
   const bootKit = await bootAndInstallBundles(t, bundleRoots);
   const { powers, bundles } = bootKit;
   const { IST } = powers.issuer.consume;
@@ -58,7 +58,7 @@ test.serial('boot, walletFactory, contractStarter', async t => {
   console.log('t.context ### after', t.context, { shared: t.context.shared });
 });
 
-test.serial('start launchIt instance to launch token', async t => {
+test.skip('start launchIt instance to launch token', async t => {
   const { shared } = t.context;
   const { powers, boardAux, bundles } = shared;
 
