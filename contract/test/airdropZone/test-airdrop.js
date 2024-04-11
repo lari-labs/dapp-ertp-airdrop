@@ -60,13 +60,13 @@ export const createDistributionConfig =
    * @returns {EpochDetails[]} An array containing the epoch details.
    */
   (array = defaultDistributionArray) =>
-    array.map(({ windowLength, tokenQuantity }, index) =>
-      harden({
-        windowLength,
+    harden(
+      array.map(({ windowLength, tokenQuantity }, index) => ({
+        windowLength, // TODO: use a timerBrand just like tokenBrand
         tokenQuantity: AmountMath.make(tokenBrand, tokenQuantity),
         index: BigInt(index),
-      }),
         inDays: Number(windowLength / DAY),
+      })),
     );
 
 harden(createDistributionConfig);
@@ -109,9 +109,8 @@ const makeTestContext = async t => {
   const AIRDROP_PAYMENT = memeMint.mintPayment(TOTAL_SUPPLY);
   const AIRDROP_PURSE = memeIssuer.makeEmptyPurse();
   AIRDROP_PURSE.deposit(AIRDROP_PAYMENT);
-  const timer = harden(makeTimer(t.log, 0n));
+  const timer = makeTimer(t.log, 0n);
 
-  await harden(AIRDROP_PURSE);
   const isFrozen = x => Object.isFrozen(x);
 
   t.deepEqual(
@@ -133,10 +132,10 @@ const makeTestContext = async t => {
   vatAdminState.installBundle('b1-ownable-Airdrop', bundle);
   /** @type { Installation<typeof import('../../src/airdropCampaign.js').start> } */
   const installation = await E(zoe).installBundleID('b1-ownable-Airdrop');
-  const schedule = harden(createMemeTokenDistributionSchedule());
+  const schedule = createMemeTokenDistributionSchedule(); // harden at creation, not consumption
   const instance = await E(zoe).startInstance(
     installation,
-    { Token: memeIssuer },
+    harden({ Token: memeIssuer }),
     harden({
       basePayoutQuantity: memes(ONE_THOUSAND),
       startTime: 10_000n,
