@@ -18,7 +18,7 @@ import {
   startContractStarter,
 } from '../src/start-contractStarter.js';
 import { makeStableFaucet } from './power-tools/mintStable.js';
-import { makeClientMarshaller } from '../src/marshalTables.js';
+import { makeClientMarshaller } from './marshalTables.js';
 import { documentStorageSchema } from './airdropData/storageDoc.js';
 import '@agoric/store/exported.js';
 import { makeCopyBagFromElements, makeCopySet } from '@endo/patterns';
