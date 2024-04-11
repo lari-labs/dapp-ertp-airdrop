@@ -1,3 +1,4 @@
+// @ts-check
 import { M, mustMatch } from '@endo/patterns';
 import { makeDurableZone } from '@agoric/zone/durable.js';
 import { E } from '@endo/far';
@@ -11,10 +12,15 @@ import {
   makeCancelTokenMaker,
 } from './helpers/validation.js';
 import { makeStateMachine } from './helpers/stateMachine.js';
-import './types.js';
-import '../../types.js';
 import { createClaimSuccessMsg } from './helpers/messages.js';
 import { getTokenQuantity } from './helpers/objectTools.js';
+
+/** @import { CopySet } from '@endo/patterns'; */
+/** @import { Brand, Issuer, Purse } from '@agoric/ertp/src/types.js'; */
+/** @import { TimerService, TimestampRecord } from '@agoric/time/src/types.js'; */
+/** @import { Baggage } from '@agoric/vat-data'; */
+/** @import { Zone } from '@agoric/base-zone'; */
+/** @import { ContractMeta } from '../@types/zoe-contract-facet'; */
 
 export const privateArgsShape = harden({
   purse: PurseShape,
@@ -30,7 +36,7 @@ export const customTermsShape = harden({
   basePayoutQuantity: AmountShape,
 });
 
-/** @type {import('../../types.js').ContractMeta} */
+/** @type {ContractMeta} */
 export const meta = {
   customTermsShape,
   privateArgsShape,
@@ -44,18 +50,21 @@ export const meta = {
  * @property {bigint} startTime Length of time (denoted in seconds) between the time in which the contract is started and the time at which users can begin claiming tokens.
  * @property {string} initialState the state in which the contract's stateMachine will begin in.
  * @property {Array} stateTransitions An array of arrays specifying all possibile state transitions that may occur within the contract's state machine. This value is passed into makeStateMachine a
- * @property {[EpochDetails]} schedule
+ * @property {EpochDetails[]} schedule
  * @property {bigint} basePayoutQuantity
- * @property {Object.<import('@agoric/ertp').IssuerRecord<import('@agoric/ertp/src/types.js').NatValue>, import('@agoric/ertp/exported.js').Brand>} brands 
-  @property {Object.<import('@agoric/ertp').IssuerRecord<import('@agoric/ertp/src/types.js').NatValue>, import('@agoric/ertp/exported.js').Issuer>} issuers  */
+ * @property {{ [keyword: string]: Brand }} brands
+ * @property {{ [keyword: string]: Issuer }} issuers
+ */
 
 /**
- * @param {import('@agoric/zoe/exported.js').zcf} zcf
- * @param {{ purse: import('@agoric/ertp/src/types.js').Purse, timer: import('@agoric/swingset-vat/tools/manual-timer.js').TimerService,}} privateArgs
- * @param {import('@agoric/vat-data').Baggage} baggage
+ * @param {ZCF<ContractTerms>} zcf
+ * @param {{ purse: Purse, timer: TimerService }} privateArgs
+ * @param {Baggage} baggage
  */
 export const start = async (zcf, privateArgs, baggage) => {
   handleFirstIncarnation(baggage, 'LifecycleIteration');
+  // XXX why is type not inferred from makeDurableZone???
+  /** @type { Zone } */
   const zone = makeDurableZone(baggage, 'rootZone');
 
   const { purse: airdropPurse, timer } = privateArgs;
@@ -100,11 +109,12 @@ export const start = async (zcf, privateArgs, baggage) => {
       }),
     },
     /**
-     * @param {import('@agoric/ertp/src/types.js').Purse} tokenPurse
-     * @param {[EpochDetails]} schedule
-     * @param {import('@endo/patterns').CopySet} store
+     * @param {Purse} tokenPurse
+     * @param {EpochDetails[]} schedule
+     * @param {CopySet} store
      */
     (tokenPurse, schedule, store) => ({
+      /** @type { object } */
       currentCancelToken: null,
       currentEpoch: 0,
       distributionSchedule: schedule,
@@ -203,9 +213,7 @@ export const start = async (zcf, privateArgs, baggage) => {
            */
           const claimHandler =
             payment =>
-            // TODO: figure out type import issue.
-            // Unable to get [OfferHandler](https://github.com/Agoric/agoric-sdk/blob/c74c62863bb9de77e66f8d909058804912e72528/packages/zoe/src/contractFacet/types-ambient.d.ts#L214)
-            //
+            /** @type {OfferHandler} */
             async (seat, offerArgs) => {
               const amount = await E(tokenIssuer).getAmountOf(payment);
 
