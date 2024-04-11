@@ -212,7 +212,7 @@ const simulateClaim = async (t, invitation, expectedPayout) => {
 
   const claimPayment = await E(claimSeat).getPayout('Payment');
 
-  t.deepEqual(await E(tokenIssuer).isLive(claimPayment), true);
+  t.deepEqual(await E(tokenIssuer).isLive(claimPayment), true); // any particular reason for isLive check? getAmountOf will do that.
   t.deepEqual(await E(tokenIssuer).getAmountOf(claimPayment), expectedPayout);
 };
 
@@ -231,6 +231,7 @@ test('zoe - ownable-Airdrop contract', async t => {
   t.deepEqual(
     head(timeIntervals),
     2_300n,
+    // are we really testing the head() function here? why not in its own test?
     'head function given an array should return the first item in the array.',
   );
   // the following tests could invoke `creatorFacet` and `publicFacet`
@@ -301,6 +302,7 @@ test('zoe - ownable-Airdrop contract', async t => {
   t.deepEqual(
     head(timeIntervals),
     2_300n,
+    // are we really testing the head() function here? why not in its own test?
     'head function given an array should return the first item in the array.',
   );
 
