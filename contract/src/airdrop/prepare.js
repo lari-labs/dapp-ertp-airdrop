@@ -204,7 +204,7 @@ export const start = async (zcf, privateArgs, baggage) => {
                 this.state.currentEpoch,
               );
             }),
-            this.state.cancelToken,
+            this.state.currentCancelToken,
           );
         },
       },
