@@ -112,10 +112,10 @@ export const bootAndInstallBundles = async (t, bundleRoots) => {
     const bundleID = getBundleId(bundle);
     t.log('publish bundle', name, bundleID.slice(0, 8));
     vatAdminState.installBundle(bundleID, bundle);
-    console.log('LATEST BUNDLE PUBLISHED::::', { bundle, bundleID, name });
+    console.log('LATEST BUNDLE PUBLISHED::::', { bundleID, name });
     bundles[name] = bundle;
   }
-  console.log('BUNDLES', bundles);
+  console.log('BUNDLES', Object.keys(bundles));
   harden(bundles);
   return { ...powersKit, bundles };
 };
