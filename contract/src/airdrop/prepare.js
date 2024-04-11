@@ -140,14 +140,26 @@ export const start = async (zcf, privateArgs, baggage) => {
         async cancelTimer() {
           await E(timer).cancel(this.state.currentCancelToken);
         },
+        /**
+         * @param {TimestampRecord} absTime
+         * @param {number} epochIdx
+         */
         updateEpochDetails(absTime, epochIdx) {
-          const newEpochDetails = this.state.distributionSchedule[epochIdx];
+          const { state } = this;
+          const { helper } = this.facets;
+          assert(
+            epochIdx < state.distributionSchedule.length,
+            `epochIdx ${epochIdx} is out of bounds`,
+          );
+          const newEpochDetails = state.distributionSchedule[epochIdx];
 
-          this.state.currentEpochEndTime =
-            absTime + newEpochDetails.windowLength;
-          this.state.earlyClaimBonus = newEpochDetails.tokenQuantity;
+          state.currentEpochEndTime = TimeMath.addAbsRel(
+            absTime,
+            newEpochDetails.windowLength,
+          );
+          state.earlyClaimBonus = newEpochDetails.tokenQuantity;
 
-          this.facets.helper.updateDistributionMultiplier(newEpochDetails);
+          helper.updateDistributionMultiplier(newEpochDetails);
         },
         async updateDistributionMultiplier(newEpochDetails) {
           const { facets } = this;
@@ -160,10 +172,11 @@ export const start = async (zcf, privateArgs, baggage) => {
             TimeMath.absValue(absValue + epochDetails.windowLength),
             makeWaker(
               'updateDistributionEpochWaker',
-              ({ absValue: latestTsValue }) => {
+              /** @param {TimestampRecord} latestTs */
+              latestTs => {
                 this.state.currentEpoch += 1;
                 facets.helper.updateEpochDetails(
-                  latestTsValue,
+                  latestTs,
                   this.state.currentEpoch,
                 );
               },

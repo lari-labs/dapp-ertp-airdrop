@@ -6,6 +6,7 @@ import bundleSource from '@endo/bundle-source';
 import { E } from '@endo/far';
 import buildManualTimer from '@agoric/zoe/tools/manualTimer.js';
 import { AmountMath } from '@agoric/ertp';
+import { TimeMath } from '@agoric/time';
 import { setup } from '../setupBasicMints.js';
 import { eventLoopIteration } from './utils.js';
 import {
@@ -249,20 +250,21 @@ test('zoe - ownable-Airdrop contract', async t => {
   );
 
   let schedule = distributionSchedule;
-  const { absValue: absValueAtStartTime } =
-    await E(timer).getCurrentTimestamp();
+  const startTime = await E(timer).getCurrentTimestamp(); // why scrape off the timerBrand?
 
   const add = x => y => x + y;
 
   let bonusTokenQuantity = getTokenQuantity(schedule);
   const firstEpochLength = getWindowLength(schedule);
 
-  const createDistrubtionWakeupTime =
-    add(firstEpochLength)(absValueAtStartTime);
+  const createDistrubtionWakeupTime = TimeMath.addAbsRel(
+    startTime,
+    firstEpochLength,
+  );
   // lastTimestamp = TimeMath.coerceTimestampRecord(lastTimestamp);
 
   t.deepEqual(
-    createDistrubtionWakeupTime,
+    createDistrubtionWakeupTime.absValue,
     ELEVEN_THOUSAND + TWENTY_THREE_HUNDRED + firstEpochLength,
   );
   t.deepEqual(bonusTokenQuantity, memes(10_000n));
