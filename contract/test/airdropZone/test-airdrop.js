@@ -26,17 +26,20 @@ const root = `${dirname}/../../src/airdrop/prepare.js`;
 
 const defaultIntervals = [2_300n, 3_500n, 5_000n, 11_000n, 150_000n, 175_000n];
 
+const DAY = 60n * 60n * 24n;
+
 /**
  * The default value for the array parameter, if not provided.
  *
  * @type {Array<{windowLength: bigint, tokenQuantity: import('@agoric/ertp/src/types.js').NatValue}>}
  */
 const defaultDistributionArray = [
+  // 159_200n = 1 day, 20:13:20
   { windowLength: 159_200n, tokenQuantity: 10_000n },
-  { windowLength: 864_000n, tokenQuantity: 6_000n },
-  { windowLength: 864_000n, tokenQuantity: 3_000n },
-  { windowLength: 864_000n, tokenQuantity: 1_500n },
-  { windowLength: 864_000n, tokenQuantity: 750n },
+  { windowLength: 10n * DAY, tokenQuantity: 6_000n },
+  { windowLength: 10n * DAY, tokenQuantity: 3_000n },
+  { windowLength: 10n * DAY, tokenQuantity: 1_500n },
+  { windowLength: 10n * DAY, tokenQuantity: 750n },
 ];
 
 /**
@@ -62,8 +65,8 @@ export const createDistributionConfig =
         windowLength,
         tokenQuantity: AmountMath.make(tokenBrand, tokenQuantity),
         index: BigInt(index),
-        inDays: Number(windowLength / 86_400n),
       }),
+        inDays: Number(windowLength / DAY),
     );
 
 harden(createDistributionConfig);
@@ -91,7 +94,7 @@ const head = ([x] = []) => x;
 /** @type {<T>(xs: T[]) => T[]} */
 const tail = ([_, ...xs]) => xs;
 
-const ONE_THOUSAND = 1_000n;
+const ONE_THOUSAND = 1_000n; // why?
 
 const makeTimer = (logFn, startTime) =>
   buildManualTimer(logFn, startTime, { eventLoopIteration });
@@ -234,7 +237,7 @@ test('zoe - ownable-Airdrop contract', async t => {
   // the following tests could invoke `creatorFacet` and `publicFacet`
   // synchronously. But we don't in order to better model the user
   // code that might be remote.
-  const [TWENTY_THREE_HUNDRED, ELEVEN_THOUSAND] = [2_300n, 11_000n];
+  const [TWENTY_THREE_HUNDRED, ELEVEN_THOUSAND] = [2_300n, 11_000n]; // why?
   await E(timer).advanceBy(TWENTY_THREE_HUNDRED);
   t.is(
     await E(publicFacet).getStatus(),
@@ -252,7 +255,7 @@ test('zoe - ownable-Airdrop contract', async t => {
   let schedule = distributionSchedule;
   const startTime = await E(timer).getCurrentTimestamp(); // why scrape off the timerBrand?
 
-  const add = x => y => x + y;
+  const add = x => y => x + y; // why?
 
   let bonusTokenQuantity = getTokenQuantity(schedule);
   const firstEpochLength = getWindowLength(schedule);
