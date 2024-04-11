@@ -16,12 +16,12 @@ import '../../types.js';
 import { createClaimSuccessMsg } from './helpers/messages.js';
 import { getTokenQuantity } from './helpers/objectTools.js';
 
-const privateArgsShape = harden({
+export const privateArgsShape = harden({
   purse: PurseShape,
   timer: TimerShape,
 });
 
-const customTermsShape = harden({
+export const customTermsShape = harden({
   startTime: M.gte(0n),
   initialState: M.string(),
   stateTransitions: M.arrayOf(M.array()),
