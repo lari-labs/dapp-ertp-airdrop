@@ -96,9 +96,13 @@ const tail = ([_, ...xs]) => xs;
 
 const ONE_THOUSAND = 1_000n; // why?
 
-const makeTimer = (logFn, startTime) =>
-  buildManualTimer(logFn, startTime, { eventLoopIteration });
-
+const makeTimer = (logFn, startTime, opts = { eventLoopIteration }) =>
+  buildManualTimer(logFn, startTime, opts);
+const noop = () => {};
+const modernTime = BigInt(new Date(2024, 6, 1, 9).valueOf() / 1000);
+const chainTimerService = buildManualTimer(noop, modernTime, {
+  timeStep: 60n,
+});
 const makeTestContext = async t => {
   const { memeMint, memeIssuer, memeKit, memes, zoe, vatAdminState } = setup();
 
@@ -109,8 +113,14 @@ const makeTestContext = async t => {
   const AIRDROP_PAYMENT = memeMint.mintPayment(TOTAL_SUPPLY);
   const AIRDROP_PURSE = memeIssuer.makeEmptyPurse();
   AIRDROP_PURSE.deposit(AIRDROP_PAYMENT);
-  const timer = makeTimer(t.log, 0n);
-
+  const timer = chainTimerService;
+  const targetStartTime = 1000n;
+  const timerBrand = await E(timer).getTimerBrand();
+  const startTime = harden({
+    timerBrand,
+    relValue: targetStartTime,
+  });
+  t.deepEqual(TimeMath.relValue(startTime), targetStartTime);
   const isFrozen = x => Object.isFrozen(x);
 
   t.deepEqual(
@@ -138,7 +148,7 @@ const makeTestContext = async t => {
     harden({ Token: memeIssuer }),
     harden({
       basePayoutQuantity: memes(ONE_THOUSAND),
-      startTime: 10_000n,
+      startTime,
       schedule,
       initialState: startState,
       stateTransitions: allowedTransitions,
@@ -238,14 +248,14 @@ test('zoe - ownable-Airdrop contract', async t => {
   // synchronously. But we don't in order to better model the user
   // code that might be remote.
   const [TWENTY_THREE_HUNDRED, ELEVEN_THOUSAND] = [2_300n, 11_000n]; // why?
-  await E(timer).advanceBy(TWENTY_THREE_HUNDRED);
+
   t.is(
     await E(publicFacet).getStatus(),
     AIRDROP_STATES.PREPARED,
     'Contract state machine should update from initialized to prepared upon successful startup.',
   );
 
-  await E(timer).advanceBy(ELEVEN_THOUSAND);
+  await E(timer).tickN(20n);
   t.deepEqual(
     await E(publicFacet).getStatus(),
     AIRDROP_STATES.OPEN,

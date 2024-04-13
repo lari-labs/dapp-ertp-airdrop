@@ -2,7 +2,13 @@
 import { M, mustMatch } from '@endo/patterns';
 import { makeDurableZone } from '@agoric/zone/durable.js';
 import { E } from '@endo/far';
-import { AmountMath, AmountShape, IssuerShape, PurseShape } from '@agoric/ertp';
+import {
+  AmountMath,
+  AmountShape,
+  BrandShape,
+  IssuerShape,
+  PurseShape,
+} from '@agoric/ertp';
 import { TimeMath } from '@agoric/time';
 import { TimerShape } from '@agoric/zoe/src/typeGuards';
 import { depositToSeat } from '@agoric/zoe/src/contractSupport/zoeHelpers.js';
@@ -14,6 +20,7 @@ import {
 import { makeStateMachine } from './helpers/stateMachine.js';
 import { createClaimSuccessMsg } from './helpers/messages.js';
 import { getTokenQuantity } from './helpers/objectTools.js';
+import { RelativeTimeRecordShape } from '@agoric/time';
 
 /** @import { CopySet } from '@endo/patterns'; */
 /** @import { Brand, Issuer, Purse } from '@agoric/ertp/src/types.js'; */
@@ -28,7 +35,7 @@ export const privateArgsShape = harden({
 });
 
 export const customTermsShape = harden({
-  startTime: M.gte(0n),
+  startTime: RelativeTimeRecordShape,
   initialState: M.string(),
   stateTransitions: M.arrayOf(M.array()),
   states: M.record(),
@@ -42,6 +49,9 @@ export const meta = {
   privateArgsShape,
   upgradability: 'canUpgrade',
 };
+
+const createFutureTs = (sourceTs, input) =>
+  TimeMath.absValue(sourceTs) + TimeMath.relValue(input);
 
 /**
  *
@@ -81,6 +91,10 @@ export const start = async (zcf, privateArgs, baggage) => {
     issuers: { Token: tokenIssuer },
   } = zcf.getTerms();
 
+  const t0 = await E(timer).getCurrentTimestamp();
+  if (!baggage.startTime) {
+    baggage.init('startTime', createFutureTs(t0, startTime));
+  }
   const claimedAccountsStore = zone.setStore('claimed users');
   // TODO: Inquire about handling state machine operations using a `Map` or `Set` from the Zone API.
   const contractStateStore = zone.setStore('contract status');
@@ -192,11 +206,17 @@ export const start = async (zcf, privateArgs, baggage) => {
           );
         },
         async prepareAirdropCampaign() {
+          const flip = fn => (x, y) => fn(y, x);
+
+          const flippedSubAbs = flip(TimeMath.subtractAbsAbs);
+
+          const currentTimestamp = await E(timer).getCurrentTimestamp();
+
           this.state.currentCancelToken = cancelTokenMaker();
           const { facets } = this;
-          console.groupEnd();
+          console.log({ startTime: TimeMath.relValue(startTime) });
           await E(timer).setWakeup(
-            TimeMath.absValue(startTime),
+            baggage.get('startTime'),
             makeWaker('claimWindowOpenWaker', ({ absValue }) => {
               stateMachine.transitionTo(states.OPEN);
               facets.helper.updateEpochDetails(
