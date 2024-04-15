@@ -150,9 +150,6 @@ const makeTestContext = async t => {
       basePayoutQuantity: memes(ONE_THOUSAND),
       startTime,
       schedule,
-      initialState: startState,
-      stateTransitions: allowedTransitions,
-      states: AIRDROP_STATES,
     }),
     harden({
       purse: AIRDROP_PURSE,
@@ -199,6 +196,7 @@ const makeTestContext = async t => {
 
 test.beforeEach('setup', async t => {
   t.context = await makeTestContext(t);
+  console.log('CONTEXT:::', t.context);
 });
 
 const simulateClaim = async (t, invitation, expectedPayout) => {
@@ -236,8 +234,11 @@ test('zoe - ownable-Airdrop contract', async t => {
     memes,
   } = t.context;
 
-  await E(creatorFacet).prepareAirdropCampaign();
-
+  t.is(
+    await E(publicFacet).getStatus(),
+    AIRDROP_STATES.PREPARED,
+    'Contract state machine should update from initialized to prepared upon successful startup.',
+  );
   t.deepEqual(
     head(timeIntervals),
     2_300n,
@@ -248,12 +249,6 @@ test('zoe - ownable-Airdrop contract', async t => {
   // synchronously. But we don't in order to better model the user
   // code that might be remote.
   const [TWENTY_THREE_HUNDRED, ELEVEN_THOUSAND] = [2_300n, 11_000n]; // why?
-
-  t.is(
-    await E(publicFacet).getStatus(),
-    AIRDROP_STATES.PREPARED,
-    'Contract state machine should update from initialized to prepared upon successful startup.',
-  );
 
   await E(timer).tickN(20n);
   t.deepEqual(

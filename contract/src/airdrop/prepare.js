@@ -9,7 +9,7 @@ import {
   IssuerShape,
   PurseShape,
 } from '@agoric/ertp';
-import { TimeMath } from '@agoric/time';
+import { TimeMath, RelativeTimeRecordShape } from '@agoric/time';
 import { TimerShape } from '@agoric/zoe/src/typeGuards';
 import { depositToSeat } from '@agoric/zoe/src/contractSupport/zoeHelpers.js';
 import { makeWaker } from './helpers/time.js';
@@ -20,7 +20,18 @@ import {
 import { makeStateMachine } from './helpers/stateMachine.js';
 import { createClaimSuccessMsg } from './helpers/messages.js';
 import { getTokenQuantity } from './helpers/objectTools.js';
-import { RelativeTimeRecordShape } from '@agoric/time';
+
+const cancelTokenMaker = makeCancelTokenMaker('airdrop-campaign');
+
+const AIRDROP_STATES = {
+  INITIALIZED: 'initialized',
+  PREPARED: 'prepared',
+  OPEN: 'claim-window-open',
+  EXPIRED: 'claim-window-expired',
+  CLOSED: 'claiming-closed',
+  RESTARTING: 'restarting',
+};
+const { OPEN, EXPIRED, PREPARED, INITIALIZED, RESTARTING } = AIRDROP_STATES;
 
 /** @import { CopySet } from '@endo/patterns'; */
 /** @import { Brand, Issuer, Purse } from '@agoric/ertp/src/types.js'; */
@@ -36,9 +47,6 @@ export const privateArgsShape = harden({
 
 export const customTermsShape = harden({
   startTime: RelativeTimeRecordShape,
-  initialState: M.string(),
-  stateTransitions: M.arrayOf(M.array()),
-  states: M.record(),
   schedule: M.array(),
   basePayoutQuantity: AmountShape,
 });
@@ -82,9 +90,6 @@ export const start = async (zcf, privateArgs, baggage) => {
   /** @type {ContractTerms} */
   const {
     startTime,
-    initialState,
-    stateTransitions,
-    states,
     schedule: distributionSchedule,
     basePayoutQuantity,
     brands: { Token: tokenBrand },
@@ -99,9 +104,13 @@ export const start = async (zcf, privateArgs, baggage) => {
   // TODO: Inquire about handling state machine operations using a `Map` or `Set` from the Zone API.
   const contractStateStore = zone.setStore('contract status');
 
-  const stateMachine = makeStateMachine(initialState, stateTransitions);
-
-  const cancelTokenMaker = makeCancelTokenMaker('airdrop-campaign');
+  const stateMachine = makeStateMachine(INITIALIZED, [
+    [INITIALIZED, [PREPARED]],
+    [PREPARED, [OPEN]],
+    [OPEN, [EXPIRED, RESTARTING]],
+    [RESTARTING, [OPEN]],
+    [EXPIRED, []],
+  ]);
 
   const makeUnderlyingAirdropKit = zone.exoClassKit(
     'Airdrop Campaign',
@@ -114,7 +123,6 @@ export const start = async (zcf, privateArgs, baggage) => {
       }),
       creator: M.interface('Creator', {
         createPayment: M.call().returns(M.any()),
-        prepareAirdropCampaign: M.call().returns(M.promise()),
       }),
       claimer: M.interface('Claimer', {
         claim: M.call().returns(M.promise()),
@@ -205,28 +213,6 @@ export const start = async (zcf, privateArgs, baggage) => {
             this.facets.helper.combineAmounts(),
           );
         },
-        async prepareAirdropCampaign() {
-          const flip = fn => (x, y) => fn(y, x);
-
-          const flippedSubAbs = flip(TimeMath.subtractAbsAbs);
-
-          const currentTimestamp = await E(timer).getCurrentTimestamp();
-
-          this.state.currentCancelToken = cancelTokenMaker();
-          const { facets } = this;
-          console.log({ startTime: TimeMath.relValue(startTime) });
-          await E(timer).setWakeup(
-            baggage.get('startTime'),
-            makeWaker('claimWindowOpenWaker', ({ absValue }) => {
-              stateMachine.transitionTo(states.OPEN);
-              facets.helper.updateEpochDetails(
-                absValue,
-                this.state.currentEpoch,
-              );
-            }),
-            this.state.currentCancelToken,
-          );
-        },
       },
       claimer: {
         getStatus() {
@@ -238,7 +224,7 @@ export const start = async (zcf, privateArgs, baggage) => {
         },
         claim() {
           assert(
-            stateMachine.getStatus() === states.OPEN,
+            stateMachine.getStatus() === AIRDROP_STATES.OPEN,
             'Claim attempt failed.',
           );
           /**
@@ -268,14 +254,28 @@ export const start = async (zcf, privateArgs, baggage) => {
     },
   );
 
-  const { creator, claimer } = makeUnderlyingAirdropKit(
+  const {
+    creator,
+    claimer,
+    helper: helperFacet,
+  } = makeUnderlyingAirdropKit(
     airdropPurse,
     distributionSchedule,
     claimedAccountsStore,
   );
 
-  // transition from the "initial" state to "prepared" state following the success of `makeUnderlyingAirdropKit`.
-  stateMachine.transitionTo(states.PREPARED);
+  const cancelToken = cancelTokenMaker();
+  // transition from the "initial" state to "prepared" state following
+  await E(timer).setWakeup(
+    baggage.get('startTime'),
+    makeWaker('claimWindowOpenWaker', ({ absValue }) => {
+      stateMachine.transitionTo(OPEN);
+      helperFacet.updateEpochDetails(absValue, 0);
+    }),
+    cancelToken,
+  );
+
+  stateMachine.transitionTo(PREPARED);
 
   return harden({
     creatorFacet: creator,
