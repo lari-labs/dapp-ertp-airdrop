@@ -1,6 +1,6 @@
 // @ts-check
 import { makePromiseKit } from '@endo/promise-kit';
-import { makeClientMarshaller } from '../marshalTables.js';
+import { makeClientMarshaller } from './marshalTables.js';
 
 /** @typedef {import('@agoric/smart-wallet/src/offers.js').OfferSpec} OfferSpec */
 /** @typedef {import('@agoric/smart-wallet/src/smartWallet').BridgeAction} BridgeAction */
@@ -12,7 +12,7 @@ export const bigIntReplacer = (k, v) => (typeof v === 'bigint' ? String(v) : v);
 /**
  * @param {string} addr
  * @param {{
- *   agd: ReturnType<import('../../a3p/agd-lib.js').makeAgd>
+ *   agd: ReturnType<import('../a3p/agd-lib.js').makeAgd>
  *   blkdur?: number
  *   delay: (ms: number) => Promise<void>
  *   chainId?: string

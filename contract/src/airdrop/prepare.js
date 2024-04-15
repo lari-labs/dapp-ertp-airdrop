@@ -1,8 +1,15 @@
+// @ts-check
 import { M, mustMatch } from '@endo/patterns';
 import { makeDurableZone } from '@agoric/zone/durable.js';
 import { E } from '@endo/far';
-import { AmountMath, AmountShape, IssuerShape, PurseShape } from '@agoric/ertp';
-import { TimeMath } from '@agoric/time';
+import {
+  AmountMath,
+  AmountShape,
+  BrandShape,
+  IssuerShape,
+  PurseShape,
+} from '@agoric/ertp';
+import { TimeMath, RelativeTimeRecordShape } from '@agoric/time';
 import { TimerShape } from '@agoric/zoe/src/typeGuards';
 import { depositToSeat } from '@agoric/zoe/src/contractSupport/zoeHelpers.js';
 import { makeWaker } from './helpers/time.js';
@@ -11,31 +18,48 @@ import {
   makeCancelTokenMaker,
 } from './helpers/validation.js';
 import { makeStateMachine } from './helpers/stateMachine.js';
-import './types.js';
-import '../../types.js';
 import { createClaimSuccessMsg } from './helpers/messages.js';
 import { getTokenQuantity } from './helpers/objectTools.js';
 
-const privateArgsShape = harden({
+const cancelTokenMaker = makeCancelTokenMaker('airdrop-campaign');
+
+const AIRDROP_STATES = {
+  INITIALIZED: 'initialized',
+  PREPARED: 'prepared',
+  OPEN: 'claim-window-open',
+  EXPIRED: 'claim-window-expired',
+  CLOSED: 'claiming-closed',
+  RESTARTING: 'restarting',
+};
+const { OPEN, EXPIRED, PREPARED, INITIALIZED, RESTARTING } = AIRDROP_STATES;
+
+/** @import { CopySet } from '@endo/patterns'; */
+/** @import { Brand, Issuer, Purse } from '@agoric/ertp/src/types.js'; */
+/** @import { TimerService, TimestampRecord } from '@agoric/time/src/types.js'; */
+/** @import { Baggage } from '@agoric/vat-data'; */
+/** @import { Zone } from '@agoric/base-zone'; */
+/** @import { ContractMeta } from '../@types/zoe-contract-facet'; */
+
+export const privateArgsShape = harden({
   purse: PurseShape,
   timer: TimerShape,
 });
 
-const customTermsShape = harden({
-  startTime: M.gte(0n),
-  initialState: M.string(),
-  stateTransitions: M.arrayOf(M.array()),
-  states: M.record(),
+export const customTermsShape = harden({
+  startTime: RelativeTimeRecordShape,
   schedule: M.array(),
   basePayoutQuantity: AmountShape,
 });
 
-/** @type {import('../../types.js').ContractMeta} */
+/** @type {ContractMeta} */
 export const meta = {
   customTermsShape,
   privateArgsShape,
   upgradability: 'canUpgrade',
 };
+
+const createFutureTs = (sourceTs, input) =>
+  TimeMath.absValue(sourceTs) + TimeMath.relValue(input);
 
 /**
  *
@@ -44,18 +68,21 @@ export const meta = {
  * @property {bigint} startTime Length of time (denoted in seconds) between the time in which the contract is started and the time at which users can begin claiming tokens.
  * @property {string} initialState the state in which the contract's stateMachine will begin in.
  * @property {Array} stateTransitions An array of arrays specifying all possibile state transitions that may occur within the contract's state machine. This value is passed into makeStateMachine a
- * @property {[EpochDetails]} schedule
+ * @property {EpochDetails[]} schedule
  * @property {bigint} basePayoutQuantity
- * @property {Object.<import('@agoric/ertp').IssuerRecord<import('@agoric/ertp/src/types.js').NatValue>, import('@agoric/ertp/exported.js').Brand>} brands 
-  @property {Object.<import('@agoric/ertp').IssuerRecord<import('@agoric/ertp/src/types.js').NatValue>, import('@agoric/ertp/exported.js').Issuer>} issuers  */
+ * @property {{ [keyword: string]: Brand }} brands
+ * @property {{ [keyword: string]: Issuer }} issuers
+ */
 
 /**
- * @param {import('@agoric/zoe/exported.js').zcf} zcf
- * @param {{ purse: import('@agoric/ertp/src/types.js').Purse, timer: import('@agoric/swingset-vat/tools/manual-timer.js').TimerService,}} privateArgs
- * @param {import('@agoric/vat-data').Baggage} baggage
+ * @param {ZCF<ContractTerms>} zcf
+ * @param {{ purse: Purse, timer: TimerService }} privateArgs
+ * @param {Baggage} baggage
  */
 export const start = async (zcf, privateArgs, baggage) => {
   handleFirstIncarnation(baggage, 'LifecycleIteration');
+  // XXX why is type not inferred from makeDurableZone???
+  /** @type { Zone } */
   const zone = makeDurableZone(baggage, 'rootZone');
 
   const { purse: airdropPurse, timer } = privateArgs;
@@ -63,22 +90,27 @@ export const start = async (zcf, privateArgs, baggage) => {
   /** @type {ContractTerms} */
   const {
     startTime,
-    initialState,
-    stateTransitions,
-    states,
     schedule: distributionSchedule,
     basePayoutQuantity,
     brands: { Token: tokenBrand },
     issuers: { Token: tokenIssuer },
   } = zcf.getTerms();
 
+  const t0 = await E(timer).getCurrentTimestamp();
+  if (!baggage.startTime) {
+    baggage.init('startTime', createFutureTs(t0, startTime));
+  }
   const claimedAccountsStore = zone.setStore('claimed users');
   // TODO: Inquire about handling state machine operations using a `Map` or `Set` from the Zone API.
   const contractStateStore = zone.setStore('contract status');
 
-  const stateMachine = makeStateMachine(initialState, stateTransitions);
-
-  const cancelTokenMaker = makeCancelTokenMaker('airdrop-campaign');
+  const stateMachine = makeStateMachine(INITIALIZED, [
+    [INITIALIZED, [PREPARED]],
+    [PREPARED, [OPEN]],
+    [OPEN, [EXPIRED, RESTARTING]],
+    [RESTARTING, [OPEN]],
+    [EXPIRED, []],
+  ]);
 
   const makeUnderlyingAirdropKit = zone.exoClassKit(
     'Airdrop Campaign',
@@ -91,7 +123,6 @@ export const start = async (zcf, privateArgs, baggage) => {
       }),
       creator: M.interface('Creator', {
         createPayment: M.call().returns(M.any()),
-        prepareAirdropCampaign: M.call().returns(M.promise()),
       }),
       claimer: M.interface('Claimer', {
         claim: M.call().returns(M.promise()),
@@ -100,11 +131,12 @@ export const start = async (zcf, privateArgs, baggage) => {
       }),
     },
     /**
-     * @param {import('@agoric/ertp/src/types.js').Purse} tokenPurse
-     * @param {[EpochDetails]} schedule
-     * @param {import('@endo/patterns').CopySet} store
+     * @param {Purse} tokenPurse
+     * @param {EpochDetails[]} schedule
+     * @param {CopySet} store
      */
     (tokenPurse, schedule, store) => ({
+      /** @type { object } */
       currentCancelToken: null,
       currentEpoch: 0,
       distributionSchedule: schedule,
@@ -130,14 +162,26 @@ export const start = async (zcf, privateArgs, baggage) => {
         async cancelTimer() {
           await E(timer).cancel(this.state.currentCancelToken);
         },
+        /**
+         * @param {TimestampRecord} absTime
+         * @param {number} epochIdx
+         */
         updateEpochDetails(absTime, epochIdx) {
-          const newEpochDetails = this.state.distributionSchedule[epochIdx];
+          const { state } = this;
+          const { helper } = this.facets;
+          assert(
+            epochIdx < state.distributionSchedule.length,
+            `epochIdx ${epochIdx} is out of bounds`,
+          );
+          const newEpochDetails = state.distributionSchedule[epochIdx];
 
-          this.state.currentEpochEndTime =
-            absTime + newEpochDetails.windowLength;
-          this.state.earlyClaimBonus = newEpochDetails.tokenQuantity;
+          state.currentEpochEndTime = TimeMath.addAbsRel(
+            absTime,
+            newEpochDetails.windowLength,
+          );
+          state.earlyClaimBonus = newEpochDetails.tokenQuantity;
 
-          this.facets.helper.updateDistributionMultiplier(newEpochDetails);
+          helper.updateDistributionMultiplier(newEpochDetails);
         },
         async updateDistributionMultiplier(newEpochDetails) {
           const { facets } = this;
@@ -150,10 +194,11 @@ export const start = async (zcf, privateArgs, baggage) => {
             TimeMath.absValue(absValue + epochDetails.windowLength),
             makeWaker(
               'updateDistributionEpochWaker',
-              ({ absValue: latestTsValue }) => {
+              /** @param {TimestampRecord} latestTs */
+              latestTs => {
                 this.state.currentEpoch += 1;
                 facets.helper.updateEpochDetails(
-                  latestTsValue,
+                  latestTs,
                   this.state.currentEpoch,
                 );
               },
@@ -168,22 +213,6 @@ export const start = async (zcf, privateArgs, baggage) => {
             this.facets.helper.combineAmounts(),
           );
         },
-        async prepareAirdropCampaign() {
-          this.state.currentCancelToken = cancelTokenMaker();
-          const { facets } = this;
-          console.groupEnd();
-          await E(timer).setWakeup(
-            TimeMath.absValue(startTime),
-            makeWaker('claimWindowOpenWaker', ({ absValue }) => {
-              stateMachine.transitionTo(states.OPEN);
-              facets.helper.updateEpochDetails(
-                absValue,
-                this.state.currentEpoch,
-              );
-            }),
-            this.state.cancelToken,
-          );
-        },
       },
       claimer: {
         getStatus() {
@@ -195,7 +224,7 @@ export const start = async (zcf, privateArgs, baggage) => {
         },
         claim() {
           assert(
-            stateMachine.getStatus() === states.OPEN,
+            stateMachine.getStatus() === AIRDROP_STATES.OPEN,
             'Claim attempt failed.',
           );
           /**
@@ -203,9 +232,7 @@ export const start = async (zcf, privateArgs, baggage) => {
            */
           const claimHandler =
             payment =>
-            // TODO: figure out type import issue.
-            // Unable to get [OfferHandler](https://github.com/Agoric/agoric-sdk/blob/c74c62863bb9de77e66f8d909058804912e72528/packages/zoe/src/contractFacet/types-ambient.d.ts#L214)
-            //
+            /** @type {OfferHandler} */
             async (seat, offerArgs) => {
               const amount = await E(tokenIssuer).getAmountOf(payment);
 
@@ -227,14 +254,28 @@ export const start = async (zcf, privateArgs, baggage) => {
     },
   );
 
-  const { creator, claimer } = makeUnderlyingAirdropKit(
+  const {
+    creator,
+    claimer,
+    helper: helperFacet,
+  } = makeUnderlyingAirdropKit(
     airdropPurse,
     distributionSchedule,
     claimedAccountsStore,
   );
 
-  // transition from the "initial" state to "prepared" state following the success of `makeUnderlyingAirdropKit`.
-  stateMachine.transitionTo(states.PREPARED);
+  const cancelToken = cancelTokenMaker();
+  // transition from the "initial" state to "prepared" state following
+  await E(timer).setWakeup(
+    baggage.get('startTime'),
+    makeWaker('claimWindowOpenWaker', ({ absValue }) => {
+      stateMachine.transitionTo(OPEN);
+      helperFacet.updateEpochDetails(absValue, 0);
+    }),
+    cancelToken,
+  );
+
+  stateMachine.transitionTo(PREPARED);
 
   return harden({
     creatorFacet: creator,

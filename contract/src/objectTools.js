@@ -1,4 +1,7 @@
 // @ts-check
+
+/** @import { ERef } from '@endo/eventual-send'; */
+
 const { entries, fromEntries } = Object;
 
 /** @type { <T extends Record<string, ERef<any>>>(obj: T) => Promise<{ [K in keyof T]: Awaited<T[K]>}> } */

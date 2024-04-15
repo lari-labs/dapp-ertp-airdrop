@@ -1,3 +1,4 @@
+// @ts-check
 /* eslint-disable-next-line import/order */
 import { test as anyTest } from '../prepare-test-env-ava.js';
 import path from 'path';
@@ -5,6 +6,7 @@ import bundleSource from '@endo/bundle-source';
 import { E } from '@endo/far';
 import buildManualTimer from '@agoric/zoe/tools/manualTimer.js';
 import { AmountMath } from '@agoric/ertp';
+import { TimeMath } from '@agoric/time';
 import { setup } from '../setupBasicMints.js';
 import { eventLoopIteration } from './utils.js';
 import {
@@ -13,22 +15,31 @@ import {
 } from '../../src/airdrop/helpers/objectTools.js';
 import { createClaimSuccessMsg } from '../../src/airdrop/helpers/messages.js';
 
+/** @import { Amount, AssetKind, Brand } from '@agoric/ertp/src/types.js'; */
 const filename = new URL(import.meta.url).pathname;
 const dirname = path.dirname(filename);
 
-/** @type {import('ava').TestFn} */
+/** @type {import('ava').TestFn<Awaited<ReturnType<makeTestContext>>>} */
 const test = anyTest;
 
 const root = `${dirname}/../../src/airdrop/prepare.js`;
 
 const defaultIntervals = [2_300n, 3_500n, 5_000n, 11_000n, 150_000n, 175_000n];
 
+const DAY = 60n * 60n * 24n;
+
+/**
+ * The default value for the array parameter, if not provided.
+ *
+ * @type {Array<{windowLength: bigint, tokenQuantity: import('@agoric/ertp/src/types.js').NatValue}>}
+ */
 const defaultDistributionArray = [
+  // 159_200n = 1 day, 20:13:20
   { windowLength: 159_200n, tokenQuantity: 10_000n },
-  { windowLength: 864_000n, tokenQuantity: 6_000n },
-  { windowLength: 864_000n, tokenQuantity: 3_000n },
-  { windowLength: 864_000n, tokenQuantity: 1_500n },
-  { windowLength: 864_000n, tokenQuantity: 750n },
+  { windowLength: 10n * DAY, tokenQuantity: 6_000n },
+  { windowLength: 10n * DAY, tokenQuantity: 3_000n },
+  { windowLength: 10n * DAY, tokenQuantity: 1_500n },
+  { windowLength: 10n * DAY, tokenQuantity: 750n },
 ];
 
 /**
@@ -45,18 +56,17 @@ export const createDistributionConfig =
   /**
    * Creates an array of epoch details for context.
    *
-   * @param {Array<{windowLength: bigint, tokenQuantity: import('@agoric/ertp/src/types.js').NatValue}>} [defaultDistributionArray] The default value for the array parameter, if not provided.
-   * @param array
+   * @param {Array<{windowLength: bigint, tokenQuantity: import('@agoric/ertp/src/types.js').NatValue}>} [array]
    * @returns {EpochDetails[]} An array containing the epoch details.
    */
   (array = defaultDistributionArray) =>
-    array.map(({ windowLength, tokenQuantity }, index) =>
-      harden({
-        windowLength,
+    harden(
+      array.map(({ windowLength, tokenQuantity }, index) => ({
+        windowLength, // TODO: use a timerBrand just like tokenBrand
         tokenQuantity: AmountMath.make(tokenBrand, tokenQuantity),
-        index,
-        inDays: windowLength / 86_400n,
-      }),
+        index: BigInt(index),
+        inDays: Number(windowLength / DAY),
+      })),
     );
 
 harden(createDistributionConfig);
@@ -79,14 +89,21 @@ const allowedTransitions = [
   [EXPIRED, []],
 ];
 
+/** @type {<T>(x: T[]) => T} */
 const head = ([x] = []) => x;
+/** @type {<T>(xs: T[]) => T[]} */
 const tail = ([_, ...xs]) => xs;
 
-const ONE_THOUSAND = 1_000n;
+const ONE_THOUSAND = 1_000n; // why?
 
-const makeTimer = (logFn, startTime) =>
-  buildManualTimer(logFn, startTime, { eventLoopIteration });
-test.beforeEach('setup', async t => {
+const makeTimer = (logFn, startTime, opts = { eventLoopIteration }) =>
+  buildManualTimer(logFn, startTime, opts);
+const noop = () => {};
+const modernTime = BigInt(new Date(2024, 6, 1, 9).valueOf() / 1000);
+const chainTimerService = buildManualTimer(noop, modernTime, {
+  timeStep: 60n,
+});
+const makeTestContext = async t => {
   const { memeMint, memeIssuer, memeKit, memes, zoe, vatAdminState } = setup();
 
   const TOTAL_SUPPLY = memes(10_000_000n);
@@ -96,9 +113,14 @@ test.beforeEach('setup', async t => {
   const AIRDROP_PAYMENT = memeMint.mintPayment(TOTAL_SUPPLY);
   const AIRDROP_PURSE = memeIssuer.makeEmptyPurse();
   AIRDROP_PURSE.deposit(AIRDROP_PAYMENT);
-  const timer = harden(makeTimer(t.log, 0n));
-
-  await harden(AIRDROP_PURSE);
+  const timer = chainTimerService;
+  const targetStartTime = 1000n;
+  const timerBrand = await E(timer).getTimerBrand();
+  const startTime = harden({
+    timerBrand,
+    relValue: targetStartTime,
+  });
+  t.deepEqual(TimeMath.relValue(startTime), targetStartTime);
   const isFrozen = x => Object.isFrozen(x);
 
   t.deepEqual(
@@ -118,18 +140,16 @@ test.beforeEach('setup', async t => {
   // Pack the contract.
   const bundle = await bundleSource(root);
   vatAdminState.installBundle('b1-ownable-Airdrop', bundle);
+  /** @type { Installation<typeof import('../../src/airdropCampaign.js').start> } */
   const installation = await E(zoe).installBundleID('b1-ownable-Airdrop');
-  const schedule = harden(createMemeTokenDistributionSchedule());
+  const schedule = createMemeTokenDistributionSchedule(); // harden at creation, not consumption
   const instance = await E(zoe).startInstance(
     installation,
-    { Token: memeIssuer },
+    harden({ Token: memeIssuer }),
     harden({
       basePayoutQuantity: memes(ONE_THOUSAND),
-      startTime: 10_000n,
+      startTime,
       schedule,
-      initialState: startState,
-      stateTransitions: allowedTransitions,
-      states: AIRDROP_STATES,
     }),
     harden({
       purse: AIRDROP_PURSE,
@@ -156,7 +176,7 @@ test.beforeEach('setup', async t => {
   //   settlementAmount: bucks(300n),
   //   timer: manualTimer,
   // });
-  t.context = {
+  return {
     memeIssuer,
     memeKit,
     memes,
@@ -172,6 +192,11 @@ test.beforeEach('setup', async t => {
     bundle,
     schedule,
   };
+};
+
+test.beforeEach('setup', async t => {
+  t.context = await makeTestContext(t);
+  console.log('CONTEXT:::', t.context);
 });
 
 const simulateClaim = async (t, invitation, expectedPayout) => {
@@ -195,7 +220,7 @@ const simulateClaim = async (t, invitation, expectedPayout) => {
 
   const claimPayment = await E(claimSeat).getPayout('Payment');
 
-  t.deepEqual(await E(tokenIssuer).isLive(claimPayment), true);
+  t.deepEqual(await E(tokenIssuer).isLive(claimPayment), true); // any particular reason for isLive check? getAmountOf will do that.
   t.deepEqual(await E(tokenIssuer).getAmountOf(claimPayment), expectedPayout);
 };
 
@@ -209,25 +234,23 @@ test('zoe - ownable-Airdrop contract', async t => {
     memes,
   } = t.context;
 
-  await E(creatorFacet).prepareAirdropCampaign();
-
-  t.deepEqual(
-    head(timeIntervals),
-    2_300n,
-    'head function given an array should return the first item in the array.',
-  );
-  // the following tests could invoke `creatorFacet` and `publicFacet`
-  // synchronously. But we don't in order to better model the user
-  // code that might be remote.
-  const [TWENTY_THREE_HUNDRED, ELEVEN_THOUSAND] = [2_300n, 11_000n];
-  await E(timer).advanceBy(TWENTY_THREE_HUNDRED);
   t.is(
     await E(publicFacet).getStatus(),
     AIRDROP_STATES.PREPARED,
     'Contract state machine should update from initialized to prepared upon successful startup.',
   );
+  t.deepEqual(
+    head(timeIntervals),
+    2_300n,
+    // are we really testing the head() function here? why not in its own test?
+    'head function given an array should return the first item in the array.',
+  );
+  // the following tests could invoke `creatorFacet` and `publicFacet`
+  // synchronously. But we don't in order to better model the user
+  // code that might be remote.
+  const [TWENTY_THREE_HUNDRED, ELEVEN_THOUSAND] = [2_300n, 11_000n]; // why?
 
-  await E(timer).advanceBy(ELEVEN_THOUSAND);
+  await E(timer).tickN(20n);
   t.deepEqual(
     await E(publicFacet).getStatus(),
     AIRDROP_STATES.OPEN,
@@ -235,20 +258,21 @@ test('zoe - ownable-Airdrop contract', async t => {
   );
 
   let schedule = distributionSchedule;
-  const { absValue: absValueAtStartTime } =
-    await E(timer).getCurrentTimestamp();
+  const startTime = await E(timer).getCurrentTimestamp(); // why scrape off the timerBrand?
 
-  const add = x => y => x + y;
+  const add = x => y => x + y; // why?
 
   let bonusTokenQuantity = getTokenQuantity(schedule);
   const firstEpochLength = getWindowLength(schedule);
 
-  const createDistrubtionWakeupTime =
-    add(firstEpochLength)(absValueAtStartTime);
+  const createDistrubtionWakeupTime = TimeMath.addAbsRel(
+    startTime,
+    firstEpochLength,
+  );
   // lastTimestamp = TimeMath.coerceTimestampRecord(lastTimestamp);
 
   t.deepEqual(
-    createDistrubtionWakeupTime,
+    createDistrubtionWakeupTime.absValue,
     ELEVEN_THOUSAND + TWENTY_THREE_HUNDRED + firstEpochLength,
   );
   t.deepEqual(bonusTokenQuantity, memes(10_000n));
@@ -283,6 +307,7 @@ test('zoe - ownable-Airdrop contract', async t => {
   t.deepEqual(
     head(timeIntervals),
     2_300n,
+    // are we really testing the head() function here? why not in its own test?
     'head function given an array should return the first item in the array.',
   );
 

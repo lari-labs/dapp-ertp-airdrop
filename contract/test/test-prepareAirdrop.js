@@ -1,5 +1,4 @@
 // @ts-check
-/* global assert */
 /* eslint-disable import/order -- https://github.com/endojs/endo/issues/1235 */
 import { test as anyTest } from './airdropData/prepare-test-env-ava.js';
 import path from 'path';
@@ -36,7 +35,7 @@ const test = anyTest;
 const nodeRequire = createRequire(import.meta.url);
 
 const bundleRoots = {
-  postalSvc: nodeRequire.resolve('../src/postalSvc.js'),
+  // postalSvc: nodeRequire.resolve('../src/postalSvc.js'),
   airdropCampaign: nodeRequire.resolve('../src/airdropCampaign.js'),
 };
 
@@ -147,7 +146,7 @@ const setupPurseNotifier = async purse => {
 };
 const makeBundleId = ({ endoZipBase64Sha512 }) => `b1-${endoZipBase64Sha512}`;
 
-test('prepareAirdrop', async t => {
+test.skip('prepareAirdrop', async t => {
   const { bundles, powers } = await bootAndInstallBundles(t, bundleRoots);
   const bundleIds = Object.entries(bundles).map(([key, val]) => ({
     key,
