@@ -92,11 +92,12 @@ export const start = async (zcf, privateArgs, baggage) => {
   const {
     startTime,
     // schedule: distributionSchedule,
-    basePayoutQuantity,
     endTime,
     brands: { Token: tokenBrand },
     issuers: { Token: tokenIssuer },
   } = zcf.getTerms();
+
+  const basePayout = AmountMath.make(tokenBrand, 1000n);
 
   const t0 = await E(timer).getCurrentTimestamp();
 
@@ -112,16 +113,6 @@ export const start = async (zcf, privateArgs, baggage) => {
   );
   const airdropStatus = baggage.get('airdropStatusTracker');
   airdropStatus.init('currentStatus', INITIALIZED);
-  console.log(
-    'baggage keys:::',
-    [...baggage.keys()],
-    airdropStatus.get('currentStatus'),
-    {
-      airdropKeys: [...Object.values(airdropStatus)],
-    },
-  );
-
-  // TODO: Inquire about handling state machine operations using a `Map` or `Set` from the Zone API.
 
   const stateMachine = makeStateMachine(
     INITIALIZED,
@@ -161,71 +152,27 @@ export const start = async (zcf, privateArgs, baggage) => {
       /** @type { object } */
       currentCancelToken: null,
       currentEpochEndTime: 0n,
-      basePayout: basePayoutQuantity,
-      earlyClaimBonus: AmountMath.add(basePayoutQuantity, basePayoutQuantity),
+      // basePayout,
+      // earlyClaimBonus: AmountMath.add(basePayout, 0n),
       internalPurse: tokenPurse,
       claimedAccounts: store,
     }),
     {
       helper: {
-        combineAmounts() {
-          const { earlyClaimBonus, basePayout } = this.state;
-          mustMatch(
-            earlyClaimBonus,
-            AmountShape,
-            'earlyClaimBonus must be an amount.',
-          );
-          mustMatch(basePayout, AmountShape, 'basePayout must be an amount.');
+        // combineAmounts() {
+        //   const { earlyClaimBonus, basePayout } = this.state;
+        //   mustMatch(
+        //     earlyClaimBonus,
+        //     AmountShape,
+        //     'earlyClaimBonus must be an amount.',
+        //   );
+        //   mustMatch(basePayout, AmountShape, 'basePayout must be an amount.');
 
-          return AmountMath.add(earlyClaimBonus, basePayout);
-        },
+        //   return AmountMath.add(earlyClaimBonus, basePayout);
+        // },
         async cancelTimer() {
           await E(timer).cancel(this.state.currentCancelToken);
         },
-        // /**
-        //  * @param {TimestampRecord} absTime
-        //  * @param {number} epochIdx
-        //  */
-        // updateEpochDetails(absTime, epochIdx) {
-        //   const { state } = this;
-        //   const { helper } = this.facets;
-        //   assert(
-        //     epochIdx < state.distributionSchedule.length,
-        //     `epochIdx ${epochIdx} is out of bounds`,
-        //   );
-        //   const newEpochDetails = state.distributionSchedule[epochIdx];
-
-        //   state.currentEpochEndTime = TimeMath.addAbsRel(
-        //     absTime,
-        //     newEpochDetails.windowLength,
-        //   );
-        //   state.earlyClaimBonus = newEpochDetails.tokenQuantity;
-
-        //   helper.updateDistributionMultiplier(newEpochDetails);
-        // },
-        // async updateDistributionMultiplier(newEpochDetails) {
-        //   const { facets } = this;
-        //   const epochDetails = newEpochDetails;
-
-        //   const { absValue } = await E(timer).getCurrentTimestamp();
-        //   this.state.currentCancelToken = cancelTokenMaker();
-
-        //   void E(timer).setWakeup(
-        //     TimeMath.absValue(absValue + epochDetails.windowLength),
-        //     makeWaker(
-        //       'updateDistributionEpochWaker',
-        //       /** @param {TimestampRecord} latestTs */
-        //       latestTs => {
-        //         this.state.currentEpoch += 1;
-        //         facets.helper.updateEpochDetails(
-        //           latestTs,
-        //           this.state.currentEpoch,
-        //         );
-        //       },
-        //     ),
-        //   );
-        //   return 'wake up successfully set.';
-        // },
       },
       creator: {
         /** @param {NatValue} x */
@@ -253,14 +200,11 @@ export const start = async (zcf, privateArgs, baggage) => {
             payment =>
             /** @type {OfferHandler} */
             async (seat, offerArgs) => {
-              console.group('---------- inside claimHandler----------');
-              console.log('------------------------');
-              console.log('payment::', payment);
-              console.log('------------------------');
-              console.log('tokenIssuer::', tokenIssuer);
-              console.log('------------------------');
-              console.groupEnd();
               const amount = await E(tokenIssuer).getAmountOf(payment);
+              // TODO: add assertion checking whether users exists
+              baggage
+                .get('airdropStatusTracker')
+                .init(offerArgs.walletAddress, amount);
 
               await depositToSeat(
                 zcf,
@@ -268,9 +212,6 @@ export const start = async (zcf, privateArgs, baggage) => {
                 { Payment: amount },
                 { Payment: payment },
               );
-              baggage
-                .get('airdropStatusTracker')
-                .init(offerArgs.walletAddress, amount);
               seat.exit();
               return createClaimSuccessMsg(amount);
             };
@@ -288,21 +229,12 @@ export const start = async (zcf, privateArgs, baggage) => {
     baggage.get('airdropStatusTracker'),
   );
 
-  console.group('---------- inside prepare----------');
-  console.log('------------------------');
-  console.log('startTime::', startTime);
-  console.log('------------------------');
-  console.log('baggage.get)(startTime)::', baggage.get('startTime'));
-  console.log('------------------------');
-  console.groupEnd();
   const cancelToken = cancelTokenMaker();
-  // transition from the "initial" state to "prepared" state following
   await E(timer).setWakeup(
     baggage.get('startTime'),
     makeWaker('claimWindowOpenWaker', ({ absValue }) => {
       console.log('inside makeWaker:::', { absValue });
       stateMachine.transitionTo(OPEN);
-      // helperFacet.updateEpochDetails(absValue, 0);
     }),
     cancelToken,
   );
