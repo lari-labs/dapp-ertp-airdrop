@@ -9,11 +9,16 @@ import { AmountMath } from '@agoric/ertp';
 import { TimeMath } from '@agoric/time';
 import { setup } from '../setupBasicMints.js';
 import { eventLoopIteration } from './utils.js';
-import {
-  getTokenQuantity,
-  getWindowLength,
-} from '../../src/airdrop/helpers/objectTools.js';
 import { createClaimSuccessMsg } from '../../src/airdrop/helpers/messages.js';
+import { createRealisticTimestamp } from '../../tools/timer-tools.js';
+import { createTimerService } from '../../tools/timer-tools.js';
+import { TimeIntervals } from '../../src/airdrop/helpers/time.js';
+
+const uncurry =
+  fn =>
+  (...args) =>
+    args.reduce((fn, arg) => fn(arg), fn);
+const getPropCurried = prop => obj => obj[prop];
 
 /** @import { Amount, AssetKind, Brand } from '@agoric/ertp/src/types.js'; */
 const filename = new URL(import.meta.url).pathname;
@@ -81,28 +86,42 @@ const AIRDROP_STATES = {
 const { OPEN, EXPIRED, PREPARED, INITIALIZED, RESTARTING } = AIRDROP_STATES;
 
 const startState = INITIALIZED;
-const allowedTransitions = [
-  [startState, [PREPARED]],
-  [PREPARED, [OPEN]],
-  [OPEN, [EXPIRED, RESTARTING]],
-  [RESTARTING, [OPEN]],
-  [EXPIRED, []],
-];
 
 /** @type {<T>(x: T[]) => T} */
 const head = ([x] = []) => x;
-/** @type {<T>(xs: T[]) => T[]} */
-const tail = ([_, ...xs]) => xs;
 
-const ONE_THOUSAND = 1_000n; // why?
+const ONE_THOUSAND = 1_000n; // why? because i think it makes for a more reliable testing environment. I can reference values such as this one when taking some action, such as depositing a payment into a purse, and then reference the same value in a test assertion.
 
-const makeTimer = (logFn, startTime, opts = { eventLoopIteration }) =>
-  buildManualTimer(logFn, startTime, opts);
-const noop = () => {};
-const modernTime = BigInt(new Date(2024, 6, 1, 9).valueOf() / 1000);
-const chainTimerService = buildManualTimer(noop, modernTime, {
-  timeStep: 60n,
+const ONE_HUNDRED_THOUSAND = ONE_THOUSAND * 100n;
+
+const PurseHolder = purse => ({
+  deposit: payment => PurseHolder(purse.deposit(payment)),
+  checkBalance: () => purse.getCurrentAmount(),
+  makePayment: payment => purse.withdraw(payment),
 });
+
+const makePurseHolder = issuer => PurseHolder(issuer.makeEmptyPurse());
+
+const depositIntoPurse = (purse, payment) => purse.deposit(payment);
+test('PurseHolder', async t => {
+  const { memeKit, memes } = setup();
+
+  const MemePurse = PurseHolder(memeKit.issuer.makeEmptyPurse());
+
+  t.deepEqual(MemePurse.checkBalance(), memes(0n));
+
+  await depositIntoPurse(
+    MemePurse,
+    memeKit.mint.mintPayment(memes(ONE_HUNDRED_THOUSAND)),
+  );
+  t.deepEqual(MemePurse.checkBalance(), memes(ONE_HUNDRED_THOUSAND));
+
+  const holderAlice = makePurseHolder(memeKit.issuer);
+
+  t.deepEqual(holderAlice.checkBalance(), memes(0n));
+});
+
+const chainTimerService = createTimerService();
 const makeTestContext = async t => {
   const { memeMint, memeIssuer, memeKit, memes, zoe, vatAdminState } = setup();
 
@@ -113,14 +132,15 @@ const makeTestContext = async t => {
   const AIRDROP_PAYMENT = memeMint.mintPayment(TOTAL_SUPPLY);
   const AIRDROP_PURSE = memeIssuer.makeEmptyPurse();
   AIRDROP_PURSE.deposit(AIRDROP_PAYMENT);
+
   const timer = chainTimerService;
-  const targetStartTime = 1000n;
+
   const timerBrand = await E(timer).getTimerBrand();
-  const startTime = harden({
-    timerBrand,
-    relValue: targetStartTime,
-  });
-  t.deepEqual(TimeMath.relValue(startTime), targetStartTime);
+
+  const makeRelTimeMaker = () => nat => harden({ timerBrand, relValue: nat });
+  const relTimeMaker = makeRelTimeMaker(timerBrand);
+  const startTime = relTimeMaker(TimeIntervals.SECONDS.ONE_DAY * 7n);
+  t.deepEqual(TimeMath.relValue(startTime), 86400000n * 7n);
   const isFrozen = x => Object.isFrozen(x);
 
   t.deepEqual(
@@ -148,8 +168,8 @@ const makeTestContext = async t => {
     harden({ Token: memeIssuer }),
     harden({
       basePayoutQuantity: memes(ONE_THOUSAND),
-      startTime,
-      schedule,
+      startTime: relTimeMaker(TimeIntervals.SECONDS.ONE_DAY * 7n),
+      endTime: relTimeMaker(ONE_THOUSAND * ONE_THOUSAND),
     }),
     harden({
       purse: AIRDROP_PURSE,
@@ -158,6 +178,16 @@ const makeTestContext = async t => {
     'c1-ownable-Airdrop',
   );
 
+  t.deepEqual(
+    [...Object.keys(instance)],
+    [
+      'creatorFacet',
+      'creatorInvitation',
+      'instance',
+      'publicFacet',
+      'adminFacet',
+    ],
+  );
   // Alice will create and fund a call spread contract, and give the invitations
   // to Bob and Carol. Bob and Carol will promptly schedule collection of funds.
   // The spread will then mature at a low price, and carol will get paid.
@@ -193,16 +223,30 @@ const makeTestContext = async t => {
     schedule,
   };
 };
-
-test.beforeEach('setup', async t => {
-  t.context = await makeTestContext(t);
-  console.log('CONTEXT:::', t.context);
+test.beforeEach(async t => {
+  const testContext = await makeTestContext(t);
+  t.context = await testContext;
 });
 
-const simulateClaim = async (t, invitation, expectedPayout) => {
-  const { zoe, memeIssuer: tokenIssuer } = t.context;
+const naiveAddressCreator = initialId => {
+  initialId += 1;
+  return string => `agoric123445${string}-${initialId}`;
+};
+
+const makeAddress = naiveAddressCreator(0);
+
+const simulateClaim = async (
+  t,
+  invitation,
+  expectedPayout,
+  walletAddress = makeAddress('abcd'),
+) => {
+  console.log({ context: t.context, invitation, expectedPayout });
+  const { zoe, memeIssuer: tokenIssuer } = await t.context;
   /** @type {UserSeat} */
-  const claimSeat = await E(zoe).offer(invitation);
+  const claimSeat = await E(zoe).offer(invitation, undefined, undefined, {
+    walletAddress,
+  });
 
   t.log('------------ testing claim capabilities -------');
   t.log('-----------------------------------------');
@@ -223,18 +267,16 @@ const simulateClaim = async (t, invitation, expectedPayout) => {
   t.deepEqual(await E(tokenIssuer).isLive(claimPayment), true); // any particular reason for isLive check? getAmountOf will do that.
   t.deepEqual(await E(tokenIssuer).getAmountOf(claimPayment), expectedPayout);
 };
-
-test('zoe - ownable-Airdrop contract', async t => {
+test('Outdated Airdrop campaign approach', async t => {
   const {
     schedule: distributionSchedule,
     timeIntervals,
-    creatorFacet,
     publicFacet,
     timer,
     memes,
-  } = t.context;
+  } = await t.context;
 
-  t.is(
+  t.deepEqual(
     await E(publicFacet).getStatus(),
     AIRDROP_STATES.PREPARED,
     'Contract state machine should update from initialized to prepared upon successful startup.',
@@ -250,40 +292,21 @@ test('zoe - ownable-Airdrop contract', async t => {
   // code that might be remote.
   const [TWENTY_THREE_HUNDRED, ELEVEN_THOUSAND] = [2_300n, 11_000n]; // why?
 
-  await E(timer).tickN(20n);
+  // Advancing the timer past the set start time.
+  await E(timer).advanceBy(TimeIntervals.SECONDS.ONE_DAY * 8n);
   t.deepEqual(
     await E(publicFacet).getStatus(),
     AIRDROP_STATES.OPEN,
-    `Contract state machine should update from ${AIRDROP_STATES.PREPARED} to ${AIRDROP_STATES.OPEN} when startTime is reached.`,
+    `Contract should maintain its prepared status until startTime is reached.`,
   );
-
-  let schedule = distributionSchedule;
-  const startTime = await E(timer).getCurrentTimestamp(); // why scrape off the timerBrand?
-
-  const add = x => y => x + y; // why?
-
-  let bonusTokenQuantity = getTokenQuantity(schedule);
-  const firstEpochLength = getWindowLength(schedule);
-
-  const createDistrubtionWakeupTime = TimeMath.addAbsRel(
-    startTime,
-    firstEpochLength,
-  );
-  // lastTimestamp = TimeMath.coerceTimestampRecord(lastTimestamp);
-
-  t.deepEqual(
-    createDistrubtionWakeupTime.absValue,
-    ELEVEN_THOUSAND + TWENTY_THREE_HUNDRED + firstEpochLength,
-  );
-  t.deepEqual(bonusTokenQuantity, memes(10_000n));
 
   await simulateClaim(
     t,
-    await E(publicFacet).claim(),
-    AmountMath.add(bonusTokenQuantity, memes(ONE_THOUSAND)),
+    await E(publicFacet).makeClaimInvitation(),
+    memes(1000n),
+    makeAddress('ef'),
   );
-  schedule = tail(distributionSchedule);
-  bonusTokenQuantity = getTokenQuantity(schedule);
+
   await E(timer).advanceBy(180_000n);
 
   t.deepEqual(
@@ -291,16 +314,15 @@ test('zoe - ownable-Airdrop contract', async t => {
     AIRDROP_STATES.OPEN,
     `Contract state machine should update from ${AIRDROP_STATES.PREPARED} to ${AIRDROP_STATES.OPEN} when startTime is reached.`,
   );
-  t.deepEqual(bonusTokenQuantity, memes(6_000n));
 
   await simulateClaim(
     t,
-    await E(publicFacet).claim(),
-    AmountMath.add(bonusTokenQuantity, memes(ONE_THOUSAND)),
+    await E(publicFacet).makeClaimInvitation(),
+    memes(1000n),
+    makeAddress('efgg'),
   );
 
   await E(timer).advanceBy(2_660_000n);
-  schedule = tail(distributionSchedule);
 
   t.log('inside test utilities');
 
@@ -313,7 +335,10 @@ test('zoe - ownable-Airdrop contract', async t => {
 
   await simulateClaim(
     t,
-    await E(publicFacet).claim(),
-    AmountMath.add(memes(3000n), memes(ONE_THOUSAND)),
+    await E(publicFacet).makeClaimInvitation(),
+    memes(1000n),
+    makeAddress('xyz'),
   );
 });
+
+test.todo('Airdrop Claim before contract status has been marked as open');

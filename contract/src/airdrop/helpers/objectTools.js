@@ -1,11 +1,19 @@
 // @ts-check
+// @jessie-check
 
 /** @import { ERef } from '@endo/eventual-send'; */
 
-const { entries, fromEntries } = Object;
+export const compose =
+  (...fns) =>
+  initialValue =>
+    fns.reduceRight((acc, val) => val(acc), initialValue);
+
+const { entries, fromEntries, keys } = Object;
 
 /** @type { <T extends Record<string, ERef<any>>>(obj: T) => Promise<{ [K in keyof T]: Awaited<T[K]>}> } */
 export const allValues = async obj => {
+  // await keyword below leads to "Nested`await`s are not permitted in Jessiees lint jessie.js/no-nested-await"
+  // is this "fine" because allValue is used to start contract and is not present in "every day operations".
   const es = await Promise.all(
     entries(obj).map(async ([k, v]) => [k, await v]),
   );
@@ -21,20 +29,23 @@ export const mapValues = (obj, f) =>
     }),
   );
 
+// What is this type?
 /** @type {<X, Y>(xs: X[], ys: Y[]) => [X, Y][]} */
 export const zip = (xs, ys) => xs.map((x, i) => [x, ys[i]]);
 
+// What is <T> ?
+// head :: [x, ...xs] => x
 /** @type {<T>(x: T[]) => T} */
 const head = ([x, ...xs]) => x;
 
-const composeM =
-  method =>
-  (...ms) =>
-    ms.reduce((f, g) => x => g(x)[method](f));
+export const objectToMap = (obj, baggage) =>
+  keys(obj).reduce((acc, val) => {
+    acc.init(val, obj[val]);
+    return acc;
+  }, baggage);
 
-/** @type { <O extends { windowLength: unknown }>(o: O[]) => O['windowLength'] } */
-const getWindowLength = x => head(x).windowLength;
-/** @type { <O extends { tokenQuantity: unknown }>(o: O[]) => O['tokenQuantity'] } */
-const getTokenQuantity = x => head(x).tokenQuantity;
+export const assign = (a, c) => ({ ...a, ...c });
+export const constructObject = (array = []) => array.reduce(assign, {});
 
-export { getWindowLength, getTokenQuantity, head };
+export const pair = (a, b) => [b, a];
+export const concatenate = (a, o) => ({ ...a, ...o });
