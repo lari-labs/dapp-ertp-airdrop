@@ -103,6 +103,10 @@ print-key: /root/.agoric/user1.key
 	@agd keys show user1 -a --keyring-backend="test"
 	@echo
 
+install-airdrop:
+	yarn node scripts/deploy-contract.js \
+		--install src/airdropCampaign.contract.js
+
 SCRIPT=start-contractStarter.js
 PERMIT=contractStarter-permit.json
 start-contract: $(SCRIPT) $(PERMIT) install-bundles
