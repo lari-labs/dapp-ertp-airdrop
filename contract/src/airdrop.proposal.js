@@ -1,6 +1,10 @@
 // @ts-check
-import { installContract, startContract } from './airdrop/airdrop.coreEval.js';
-import { allValues } from './objectTools';
+import {
+  AmountMath,
+  installContract,
+  startContract,
+} from './airdrop/airdrop.coreEval.js';
+import { allValues } from './objectTools.js';
 
 const { Fail } = assert;
 
@@ -40,12 +44,9 @@ export const makeTerms = (brand, baseUnit) => {
  *   brand: PromiseSpaceOf<{ Ticket: Brand }>;
  *   issuer: PromiseSpaceOf<{ Ticket: Issuer }>;
  *   instance: PromiseSpaceOf<{ sellConcertTickets: Instance }>
- * }} SellTicketsSpace
+ * }} StartAirdropCampaign
  */
-export const startSellConcertTicketsContract = async (
-  permittedPowers,
-  config,
-) => {
+export const startAirdropCampaignContract = async (permittedPowers, config) => {
   console.log('core eval for', contractName);
   const {
     // must be supplied by caller or template-replaced
@@ -62,6 +63,7 @@ export const startSellConcertTicketsContract = async (
     issuer: permittedPowers.issuer.consume.IST,
   });
 
+  console.log({ ist });
   const terms = makeTerms(ist.brand, 1n * IST_UNIT);
 
   await startContract(permittedPowers, {
@@ -70,8 +72,12 @@ export const startSellConcertTicketsContract = async (
       installation,
       issuerKeywordRecord: { Price: ist.issuer },
       terms,
+      privateArgs: {
+        timer: await permittedPowers.chainTimerService,
+        purse: ist.issuer.makeEmptyPurse(),
+      },
     },
-    issuerNames: ['Ticket'],
+    issuerNames: ['Airdrop'],
   });
 
   console.log(contractName, '(re)started');
@@ -94,4 +100,4 @@ export const permit = harden({
   brand: { consume: { IST: true }, produce: { Ticket: true } },
 });
 
-export const main = startSellConcertTicketsContract;
+export const main = startAirdropCampaignContract;

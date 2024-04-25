@@ -10,7 +10,7 @@ import {
   PurseShape,
 } from '@agoric/ertp';
 import { TimeMath, RelativeTimeRecordShape } from '@agoric/time';
-import { TimerShape } from '@agoric/zoe/src/typeGuards';
+import { TimerShape } from '@agoric/zoe/src/typeGuards.js';
 import { depositToSeat } from '@agoric/zoe/src/contractSupport/zoeHelpers.js';
 import { makeWaker } from './helpers/time.js';
 import {
