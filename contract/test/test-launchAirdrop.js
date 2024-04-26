@@ -94,7 +94,7 @@ test.skip('start launchIt instance to launch token', async t => {
     Invitation: await powers.brand.consume.Invitation,
   };
   const timerService = await powers.consume.chainTimerService; // XXX
-
+  t.is(timerService, await E(timerService).getTimerBrand());
   /**
    * @type {import('./market-actors.js').WellKnown &
    *  import('./market-actors.js').WellKnownKinds &

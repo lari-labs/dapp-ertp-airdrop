@@ -701,6 +701,29 @@
     glob "^7.1.6"
     tmp "^0.2.1"
 
+"@agoric/zoe@0.26.3-u14.0", "@agoric/zoe@^0.26.3-u14.0":
+  version "0.26.3-u14.0"
+  resolved "https://registry.yarnpkg.com/@agoric/zoe/-/zoe-0.26.3-u14.0.tgz#69e121b4c1dace7fb32d692d8512e80848c0077f"
+  integrity sha512-zqUNmBKndNDEfoVHEvzAaB0aZLcYugYcEPMoJjhaYVbM5Lc2PmRDZN6gssYHnD0dzF8oDC4SDeq4CC/G4sEdTg==
+  dependencies:
+    "@agoric/assert" "^0.6.1-u11wf.0"
+    "@agoric/ertp" "^0.16.3-u14.0"
+    "@agoric/internal" "^0.4.0-u14.0"
+    "@agoric/notifier" "^0.6.3-u14.0"
+    "@agoric/store" "^0.9.3-u14.0"
+    "@agoric/swingset-vat" "^0.32.3-u14.0"
+    "@agoric/time" "^0.3.3-u14.0"
+    "@agoric/vat-data" "^0.5.3-u14.0"
+    "@endo/bundle-source" "2.5.2-upstream-rollup"
+    "@endo/captp" "3.1.1"
+    "@endo/eventual-send" "0.17.2"
+    "@endo/far" "0.2.18"
+    "@endo/import-bundle" "0.3.4"
+    "@endo/marshal" "0.8.5"
+    "@endo/nat" "4.1.27"
+    "@endo/patterns" "0.2.2"
+    "@endo/promise-kit" "0.2.56"
+
 "@agoric/zoe@^0.26.2":
   version "0.26.2"
   resolved "https://registry.yarnpkg.com/@agoric/zoe/-/zoe-0.26.2.tgz#c6cd260171a4c0307e160b93ae9f6ce29a675d70"
@@ -723,29 +746,6 @@
     "@endo/nat" "^4.1.27"
     "@endo/patterns" "^0.2.2"
     "@endo/promise-kit" "^0.2.56"
-
-"@agoric/zoe@^0.26.3-u14.0":
-  version "0.26.3-u14.0"
-  resolved "https://registry.yarnpkg.com/@agoric/zoe/-/zoe-0.26.3-u14.0.tgz#69e121b4c1dace7fb32d692d8512e80848c0077f"
-  integrity sha512-zqUNmBKndNDEfoVHEvzAaB0aZLcYugYcEPMoJjhaYVbM5Lc2PmRDZN6gssYHnD0dzF8oDC4SDeq4CC/G4sEdTg==
-  dependencies:
-    "@agoric/assert" "^0.6.1-u11wf.0"
-    "@agoric/ertp" "^0.16.3-u14.0"
-    "@agoric/internal" "^0.4.0-u14.0"
-    "@agoric/notifier" "^0.6.3-u14.0"
-    "@agoric/store" "^0.9.3-u14.0"
-    "@agoric/swingset-vat" "^0.32.3-u14.0"
-    "@agoric/time" "^0.3.3-u14.0"
-    "@agoric/vat-data" "^0.5.3-u14.0"
-    "@endo/bundle-source" "2.5.2-upstream-rollup"
-    "@endo/captp" "3.1.1"
-    "@endo/eventual-send" "0.17.2"
-    "@endo/far" "0.2.18"
-    "@endo/import-bundle" "0.3.4"
-    "@endo/marshal" "0.8.5"
-    "@endo/nat" "4.1.27"
-    "@endo/patterns" "0.2.2"
-    "@endo/promise-kit" "0.2.56"
 
 "@agoric/zone@0.2.3-u14.0", "@agoric/zone@^0.2.3-u14.0":
   version "0.2.3-u14.0"
@@ -4192,7 +4192,7 @@ eslint@^8.45.0, eslint@^8.47.0:
     strip-ansi "^6.0.1"
     text-table "^0.2.0"
 
-"esm@github:agoric-labs/esm#Agoric-built":
+esm@agoric-labs/esm#Agoric-built:
   version "3.2.25"
   resolved "https://codeload.github.com/agoric-labs/esm/tar.gz/3603726ad4636b2f865f463188fcaade6375638e"
 
