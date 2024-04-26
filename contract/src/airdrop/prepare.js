@@ -93,9 +93,12 @@ export const start = async (zcf, privateArgs, baggage) => {
     startTime,
     // schedule: distributionSchedule,
     endTime,
+    tokenName = 'Airdroplets',
     brands: { Token: tokenBrand },
     issuers: { Token: tokenIssuer },
   } = zcf.getTerms();
+
+  // const tokenMint = zcf.makeZCFMint(tokenName);
 
   const basePayout = AmountMath.make(tokenBrand, 1000n);
 
@@ -103,6 +106,7 @@ export const start = async (zcf, privateArgs, baggage) => {
 
   await objectToMap(
     {
+      // exchange this for a purse created from ZCFMint
       purse: airdropPurse,
       tokenIssuer,
       startTime: createFutureTs(t0, startTime),

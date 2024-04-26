@@ -1,38 +1,12 @@
 // @ts-check
-import {
-  AmountMath,
-  installContract,
-  startContract,
-} from './airdrop/airdrop.coreEval.js';
+import { E } from '@endo/far';
+import { installContract, startContract } from './airdrop/airdrop.coreEval.js';
+import { TimeIntervals } from './airdrop/helpers/time.js';
 import { allValues } from './objectTools.js';
 
 const { Fail } = assert;
 
-const contractName = 'sellConcertTickets';
-const IST_UNIT = 1_000_000n;
-
-export const makeInventory = (brand, baseUnit) => {
-  return {
-    frontRow: {
-      tradePrice: AmountMath.make(brand, baseUnit * 3n),
-      maxTickets: 3n,
-    },
-    middleRow: {
-      tradePrice: AmountMath.make(brand, baseUnit * 2n),
-      maxTickets: 3n,
-    },
-    lastRow: {
-      tradePrice: AmountMath.make(brand, baseUnit * 1n),
-      maxTickets: 3n,
-    },
-  };
-};
-
-export const makeTerms = (brand, baseUnit) => {
-  return {
-    inventory: makeInventory(brand, baseUnit),
-  };
-};
+const contractName = 'airdrop';
 
 /**
  * Core eval script to start contract
@@ -63,21 +37,33 @@ export const startAirdropCampaignContract = async (permittedPowers, config) => {
     issuer: permittedPowers.issuer.consume.IST,
   });
 
-  console.log({ ist });
-  const terms = makeTerms(ist.brand, 1n * IST_UNIT);
+  const timer = await permittedPowers.consume.chainTimerService;
+
+  const timerBrand = await E(timer).getTimerBrand();
+  const startTime = harden({
+    timerBrand,
+    relValue: TimeIntervals.SECONDS.ONE_DAY,
+  });
+  const endTime = harden({
+    timerBrand,
+    relValue: TimeIntervals.SECONDS.ONE_DAY * 7n,
+  });
 
   await startContract(permittedPowers, {
     name: contractName,
     startArgs: {
       installation,
       issuerKeywordRecord: { Price: ist.issuer },
-      terms,
+      terms: {
+        startTime,
+        endTime,
+      },
       privateArgs: {
-        timer: await permittedPowers.chainTimerService,
+        timer,
+        // TODO: think about this approach....
         purse: ist.issuer.makeEmptyPurse(),
       },
     },
-    issuerNames: ['Airdrop'],
   });
 
   console.log(contractName, '(re)started');
@@ -86,6 +72,7 @@ export const startAirdropCampaignContract = async (permittedPowers, config) => {
 /** @type { import("@agoric/vats/src/core/lib-boot").BootstrapManifestPermit } */
 export const permit = harden({
   consume: {
+    chainTimerService: true,
     agoricNames: true,
     brandAuxPublisher: true,
     startUpgradable: true, // to start contract and save adminFacet
@@ -96,8 +83,8 @@ export const permit = harden({
     produce: { [contractName]: true },
   },
   instance: { produce: { [contractName]: true } },
-  issuer: { consume: { IST: true }, produce: { Ticket: true } },
-  brand: { consume: { IST: true }, produce: { Ticket: true } },
+  issuer: { consume: { IST: true } },
+  brand: { consume: { IST: true } },
 });
 
 export const main = startAirdropCampaignContract;

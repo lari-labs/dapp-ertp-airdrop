@@ -112,6 +112,7 @@ const main = async (bundleDir = 'bundles') => {
   if (flags.eval) {
     console.log('------------------------');
     for await (const entryFile of flags.eval) {
+      console.log('entryFile', { entryFile });
       const result = await tools.runCoreEval({
         name: stem(entryFile),
         entryFile,

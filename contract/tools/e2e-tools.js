@@ -490,8 +490,8 @@ export const makeE2ETools = (
       const shortId = getBundleId(bundle).slice(0, 8);
 
       if (Object.keys(bundles).length === 1) {
-        progress('mint 100 IST');
-        await runPackageScript('docker:make', 'mint100');
+        progress('NOT MINTING 100IST');
+        // await runPackageScript('docker:make', 'mint100');
       }
 
       const bundleSizeMb = (bundleJSON.length / 1_000_000).toFixed(3);
