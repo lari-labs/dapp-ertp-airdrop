@@ -60,9 +60,6 @@ approveProposals() {
 # wait for blocks to start being produced
 waitForBlock 2
 
-# Approve any proposals forever in the background.
-approveProposals &
-
 make -C /workspace/contract mint100
 
 # bring back chain process to foreground
