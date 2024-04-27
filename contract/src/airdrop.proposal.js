@@ -61,7 +61,7 @@ export const startAirdropCampaignContract = async (permittedPowers, config) => {
       privateArgs: {
         timer,
         // TODO: think about this approach....
-        purse: await ist.issuer.makeEmptyPurse(),
+        purse: await E(ist.issuer).makeEmptyPurse(),
       },
     },
   });
