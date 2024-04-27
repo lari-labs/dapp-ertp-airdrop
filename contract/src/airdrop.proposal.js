@@ -49,11 +49,22 @@ export const startAirdropCampaignContract = async (permittedPowers, config) => {
     relValue: TimeIntervals.SECONDS.ONE_DAY * 7n,
   });
 
+  console.log('FIXME: ZCFMint is probably better than mintHolder');
+  const { zoe, agoricNames } = permittedPowers.consume;
+  const { publicFacet: tokenIssuer } = await E(zoe).startInstance(
+    E(agoricNames).lookup('installation', 'mintHolder'),
+    undefined,
+    { keyword: 'FIXME' },
+  );
+
   await startContract(permittedPowers, {
     name: contractName,
     startArgs: {
       installation,
-      issuerKeywordRecord: { Price: ist.issuer },
+      issuerKeywordRecord: {
+        Price: ist.issuer,
+        Token: tokenIssuer, // FIXME
+      },
       terms: {
         startTime,
         endTime,
