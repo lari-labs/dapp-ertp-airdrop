@@ -88,6 +88,9 @@ start-contract-pay:
 
 # Dependencies to re-run core eval when source changes
 # NOTE: manually updated
+bundles/deploy-airdrop.js: src/airdrop.proposal.js
+	@echo '{"up-to-date": false}'
+
 bundles/deploy-send.js: src/start-postalSvc.js
 	@echo '{"up-to-date": false}'
 
