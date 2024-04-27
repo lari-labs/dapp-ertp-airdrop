@@ -134,7 +134,7 @@ export const start = async (zcf, privateArgs, baggage) => {
     'Airdrop Campaign',
     {
       helper: M.interface('Helper', {
-        combineAmounts: M.call().returns(AmountShape),
+        // combineAmounts: M.call().returns(AmountShape),
         cancelTimer: M.call().returns(M.promise()),
         // updateDistributionMultiplier: M.call(M.any()).returns(M.promise()),
         // updateEpochDetails: M.call(M.any(), M.any()).returns(),
