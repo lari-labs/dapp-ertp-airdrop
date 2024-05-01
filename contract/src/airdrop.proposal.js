@@ -1,9 +1,27 @@
 // @ts-check
 import { E } from '@endo/far';
-import { installContract, startContract } from './airdrop/airdrop.coreEval.js';
+import { makeIssuerKit } from '@agoric/ertp/src/issuerKit.js';
+import {
+  AmountMath,
+  installContract,
+  startContract,
+} from './airdrop/airdrop.coreEval.js';
 import { TimeIntervals } from './airdrop/helpers/time.js';
 import { allValues } from './objectTools.js';
 
+/** @import { Payment, Brand, Issuer } from '@agoric/ertp/src/types.js'; */
+// TODO: Get to the bottom of using bankManager
+// /** @import { AssetIssuerKit } from '@agoric/vats/src/vat-bank.js' */
+// /** @import {ERef} from '@endo/far'  */
+
+// /**
+//  *
+//  * @param {string} denom lower-level denomination string
+//  * @param {string} issuerName
+//  * @param {string} proposedName
+//  * @param {import('@agoric/vats/src/vat-bank.js').AssetIssuerKit & { payment?: ERef<Payment> }} kit ERTP issuer
+//  *
+//  */
 const { Fail } = assert;
 
 const contractName = 'airdrop';
@@ -49,13 +67,26 @@ export const startAirdropCampaignContract = async (permittedPowers, config) => {
     relValue: TimeIntervals.SECONDS.ONE_DAY * 7n,
   });
 
-  console.log('FIXME: ZCFMint is probably better than mintHolder');
   const { zoe, agoricNames } = permittedPowers.consume;
-  const { publicFacet: tokenIssuer } = await E(zoe).startInstance(
+
+  const { publicFacet: tokenIssuer, creatorFacet: tokenMint } = await E(
+    zoe,
+  ).startInstance(
     E(agoricNames).lookup('installation', 'mintHolder'),
     undefined,
-    { keyword: 'FIXME' },
+    { keyword: 'Airdroplets' },
   );
+
+  const tokenBrand = await E(tokenIssuer).getBrand();
+  const purse = await E(tokenIssuer).makeEmptyPurse();
+  const oneMillionPayment = await E(tokenMint).mintPayment(
+    AmountMath.make(tokenBrand, 1_000_000n),
+  );
+
+  console.log('checking issuer and payment', {
+    tokenIssuer,
+    oneMillionPayment,
+  });
 
   await startContract(permittedPowers, {
     name: contractName,
@@ -72,7 +103,7 @@ export const startAirdropCampaignContract = async (permittedPowers, config) => {
       privateArgs: {
         timer,
         // TODO: think about this approach....
-        purse: await E(ist.issuer).makeEmptyPurse(),
+        purse: await E(purse).deposit(oneMillionPayment),
       },
     },
   });
@@ -83,6 +114,7 @@ export const startAirdropCampaignContract = async (permittedPowers, config) => {
 /** @type { import("@agoric/vats/src/core/lib-boot").BootstrapManifestPermit } */
 export const permit = harden({
   consume: {
+    bankManager: true,
     chainTimerService: true,
     agoricNames: true,
     brandAuxPublisher: true,
