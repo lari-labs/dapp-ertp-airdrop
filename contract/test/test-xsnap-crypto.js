@@ -133,7 +133,7 @@ function dataStructurePerformance(logn) {
 // retain the benchmark for future verification in the unlikely event that the
 // performance character of XS collections regresses.
 
-test('Array, Map, Set growth is O(log(n))', async t => {
+test.skip('Array, Map, Set growth is O(log(n))', async t => {
   const opts = options();
   const vat = await xsnap({ ...opts, meteringLimit: 0 });
   await vat.evaluate(
