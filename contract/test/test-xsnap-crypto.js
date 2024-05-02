@@ -75,3 +75,18 @@ test('Base64.encode', async t => {
   await vat.issueCommand(inputUint8Array);
   t.deepEqual(opts.messages, [expectedOutputString]);
 });
+
+test('high resolution timer', async t => {
+  const opts = options();
+  const vat = await xsnap(opts);
+  t.teardown(() => vat.terminate());
+  await vat.evaluate(`
+    const send = it => issueCommand(new TextEncoder().encode(JSON.stringify(it)).buffer);
+
+    const t = performance.now();
+    send(t);
+  `);
+  const [milliseconds] = opts.messages.map(s => JSON.parse(s));
+  t.log({ milliseconds, date: new Date(milliseconds) });
+  t.is(typeof milliseconds, 'number');
+});
