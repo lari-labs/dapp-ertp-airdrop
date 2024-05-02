@@ -53,13 +53,15 @@
     "@agoric/time": "0.3.3-u14.0",
     "@agoric/zoe": "0.26.3-u14.0",
     "@agoric/zone": "0.2.3-u14.0",
+    "@endo/base64": "^1.0.4",
     "@endo/far": "^0.2.22",
     "@endo/nat": "5.0.6",
     "@endo/marshal": "^0.8.9",
     "@endo/patterns": "^0.2.5",
     "@endo/promise-kit": "0.2.56",
     "@noble/hashes": "^1.4.0",
-    "@noble/secp256k1": "^2.1.0"
+    "@noble/secp256k1": "^2.1.0",
+    "bech32": "^2.0.0"
   },
   "ava": {
     "files": [
