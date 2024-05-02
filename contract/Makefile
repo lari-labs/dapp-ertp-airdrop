@@ -60,7 +60,13 @@ vote:
 instance-q:
 	agd query vstorage data published.agoricNames.instance -o json
 
-start-contract: start-contract-airdrop
+start-contract: check-contract-airdrop
+
+API=http://localhost:1317
+check-contract-airdrop: start-contract-airdrop
+	@ curl -s $(API)/agoric/vstorage/data/published.agoricNames.instance \
+	  | jq -c '.value | fromjson | .values[-1] | fromjson | .body[1:] | fromjson | .[]' \
+	  | grep airdrop
 
 start-contract-airdrop:
 	yarn node scripts/deploy-contract.js \
@@ -88,6 +94,9 @@ start-contract-pay:
 
 # Dependencies to re-run core eval when source changes
 # NOTE: manually updated
+bundles/deploy-airdrop.js: src/airdrop.proposal.js
+	@echo '{"up-to-date": false}'
+
 bundles/deploy-send.js: src/start-postalSvc.js
 	@echo '{"up-to-date": false}'
 
