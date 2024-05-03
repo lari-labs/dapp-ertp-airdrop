@@ -35,11 +35,26 @@ const hashBench = logn => {
   return { size: n };
 };
 
-test('pubkeyToAddress performance', t => {
+test('pubkeyToAddress performance: 1<<8 iterations', t => {
   console.log('pubkeyToAddress performance start');
-  for (const n of [8, 12, 14]) {
-    hashBench(n);
-    console.log(n, 'end', 1 << n);
-  }
+  const n = 8;
+  hashBench(n);
+  console.log(n, 'end', 1 << n);
+  t.pass();
+});
+
+test('pubkeyToAddress performance: 1<<12 iterations', t => {
+  console.log('pubkeyToAddress performance start');
+  const n = 12;
+  hashBench(n);
+  console.log(n, 'end', 1 << n);
+  t.pass();
+});
+
+test('pubkeyToAddress performance: 1<<14 iterations', t => {
+  console.log('pubkeyToAddress performance start');
+  const n = 14;
+  hashBench(n);
+  console.log(n, 'end', 1 << n);
   t.pass();
 });
