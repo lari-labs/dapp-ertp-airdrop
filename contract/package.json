@@ -53,6 +53,7 @@
     "@agoric/time": "0.3.3-u14.0",
     "@agoric/zoe": "0.26.3-u14.0",
     "@agoric/zone": "0.2.3-u14.0",
+    "@cosmjs/crypto": "0.32.3",
     "@endo/base64": "^1.0.4",
     "@endo/far": "^0.2.22",
     "@endo/nat": "5.0.6",
@@ -66,8 +67,7 @@
   "ava": {
     "files": [
       "test/**/test-*.js"
-    ],
-    "timeout": "10m"
+    ]
   },
   "keywords": [],
   "repository": {
