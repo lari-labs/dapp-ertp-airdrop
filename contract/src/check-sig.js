@@ -1,5 +1,4 @@
 // @ts-check
-<<<<<<< HEAD
 import { decodeBase64, encodeBase64 } from '@endo/base64';
 import { bech32 } from 'bech32';
 import { sha256 } from '@noble/hashes/sha256';
@@ -8,11 +7,6 @@ import {
   makeSignDoc as makeSignDocAmino,
   serializeSignDoc,
 } from '@cosmjs/amino';
-=======
-import { decodeBase64 } from '@endo/base64';
-import { bech32 } from 'bech32';
-import { sha256 } from '@noble/hashes/sha256';
->>>>>>> dev
 
 import { ripemd160 } from '@noble/hashes/ripemd160';
 
@@ -34,7 +28,6 @@ export const pubkeyToAddress = (pubkey, prefix) => {
   const h2 = ripemd160.create().update(h1).digest();
   return toBech32(prefix, h2);
 };
-<<<<<<< HEAD
 
 const fail = msg => {
   throw Error(msg);
@@ -90,5 +83,3 @@ export const checkSig = async (kSig, signer) => {
   const ok = await Secp256k1.verifySignature(cSig, hash, pkbytes);
   ok || fail('signature verification failure');
 };
-=======
->>>>>>> dev
