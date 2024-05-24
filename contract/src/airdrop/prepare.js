@@ -46,6 +46,7 @@ export const privateArgsShape = harden({
 });
 
 export const customTermsShape = harden({
+  rootHash: M.any(),
   startTime: RelativeTimeRecordShape,
   endTime: M.or(RelativeTimeRecordShape, M.null()),
   basePayoutQuantity: AmountShape,
@@ -91,13 +92,14 @@ export const start = async (zcf, privateArgs, baggage) => {
   /** @type {ContractTerms} */
   const {
     startTime,
+    rootHash,
     // schedule: distributionSchedule,
     endTime,
     tokenName = 'Airdroplets',
     brands: { Token: tokenBrand },
     issuers: { Token: tokenIssuer },
   } = zcf.getTerms();
-
+  debugger;
   // const tokenMint = zcf.makeZCFMint(tokenName);
 
   const basePayout = AmountMath.make(tokenBrand, 1000n);
@@ -115,7 +117,15 @@ export const start = async (zcf, privateArgs, baggage) => {
     },
     baggage,
   );
-  const airdropStatus = baggage.get('airdropStatusTracker');
+
+  const getKey = baggage => key => baggage.get(key);
+
+  const [airdropStatus, claimedAccountsStore] = [
+    'airdropStatusTracker',
+    'claimedAccountsStore',
+  ].map(getKey(baggage));
+
+  console.log('AIRDROP STATUS', claimedAccountsStore);
   airdropStatus.init('currentStatus', INITIALIZED);
 
   const stateMachine = makeStateMachine(
@@ -205,10 +215,14 @@ export const start = async (zcf, privateArgs, baggage) => {
             /** @type {OfferHandler} */
             async (seat, offerArgs) => {
               const amount = await E(tokenIssuer).getAmountOf(payment);
+
+              console.log({ offerArgs });
               // TODO: add assertion checking whether users exists
-              baggage
-                .get('airdropStatusTracker')
-                .init(offerArgs.walletAddress, amount);
+              claimedAccountsStore.add(offerArgs.walletAddress, {
+                amount,
+              });
+
+              console.log([...claimedAccountsStore.entries()]);
 
               await depositToSeat(
                 zcf,
