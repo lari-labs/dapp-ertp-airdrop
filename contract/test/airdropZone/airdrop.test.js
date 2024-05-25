@@ -282,7 +282,7 @@ const simulateClaim = async (
   t.deepEqual(await E(tokenIssuer).isLive(claimPayment), true); // any particular reason for isLive check? getAmountOf will do that.
   t.deepEqual(await E(tokenIssuer).getAmountOf(claimPayment), expectedPayout);
 };
-test('Outdated Airdrop campaign approach', async t => {
+test('timer-based airdrop campaign ', async t => {
   const {
     schedule: distributionSchedule,
     timeIntervals,
