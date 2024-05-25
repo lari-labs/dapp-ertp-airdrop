@@ -21,7 +21,7 @@ const getPubkeyValue = compose(getKey, getPubkey);
 
 const toHexString = value => value.toString('hex');
 const getRoot = x => x.getRoot();
-const getProof = x => value => x.getProof(value);
+const getProof = tree => value => tree.getProof(value);
 
 const getRootHash = compose(toHexString, getRoot);
 
@@ -103,6 +103,7 @@ const TEST_TREE_DATA = {
   tree: tree1,
   rootHash: getRootHash(tree1),
   leaves: pubkeys,
+  proofs: pubkeys.map(getProof(tree1)),
 };
 const { tree: testTree } = TEST_TREE_DATA;
 export { accounts, pubkeys, testTree, TEST_TREE_DATA };

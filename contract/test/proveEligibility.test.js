@@ -2,25 +2,78 @@
 // eslint-disable-next-line import/order
 import { test as anyTest } from './airdropData/prepare-test-env-ava.js';
 import { createRequire } from 'module';
+import path from 'path';
 import { E } from '@endo/far';
 import { AmountMath } from '@agoric/ertp/src/amountMath.js';
+import { TimeMath } from '@agoric/time';
 // ??? import { Id, IO, Task } from '../src/airdrop/adts/monads.js';
 import { bootAndInstallBundles } from './boot-tools.js';
-// import {
-//   installContractStarter,
-//   startContractStarter,
-// } from '../src/start-contractStarter.js';
 import { makeBundleCacheContext } from '../tools/bundle-tools.js';
-import { TimeMath } from '@agoric/time';
 
 import '@agoric/store/exported.js';
+import { accounts, pubkeys, TEST_TREE_DATA } from './data/agoric.accounts.js';
 import { TimeIntervals } from '../src/airdrop/helpers/time.js';
-import { createTimerService } from '../tools/timer-tools.js';
 import { createDistributionConfig } from './utils.js';
 import { setup } from './setupBasicMints.js';
-import path from 'path';
 
-import { TEST_TREE_DATA } from './data/agoric.accounts.js';
+const naiveAddressCreator = initialId => {
+  initialId += 1;
+  return string => `agoric123445${string}-${initialId}`;
+};
+
+const head = ([x]) => x;
+const parseAccountInfo = ({ pubkey, address }) => ({
+  pubkey: pubkey.key,
+  address,
+});
+
+const defaultClaimaint = {
+  ...parseAccountInfo(head(accounts)),
+  proof: head(TEST_TREE_DATA.proofs),
+};
+const makeAddress = naiveAddressCreator(0);
+const simulateClaim = async (
+  t,
+  invitation,
+  expectedPayout,
+  claimAccountDetails = defaultClaimaint,
+) => {
+  const { pubkey, address, proof } = claimAccountDetails;
+
+  t.is(pubkey, proof);
+  console.log({
+    context: t.context,
+    invitation,
+    expectedPayout,
+    pubkey,
+    proof,
+    defaultClaimaint,
+  });
+  const { zoe, memeIssuer: tokenIssuer } = await t.context;
+  /** @type {UserSeat} */
+  const claimSeat = await E(zoe).offer(invitation, undefined, undefined, {
+    ...claimAccountDetails,
+  });
+
+  t.log('------------ testing claim capabilities -------');
+  t.log('-----------------------------------------');
+  t.log('AirdropResult', claimSeat);
+  t.log('-----------------------------------------');
+  t.log('expectedPayout value', expectedPayout);
+  t.log('-----------------------------------------');
+
+  //
+  t.deepEqual(
+    await E(claimSeat).getOfferResult(),
+    // Need
+    createClaimSuccessMsg(expectedPayout),
+  );
+
+  const claimPayment = await E(claimSeat).getPayout('Payment');
+
+  t.deepEqual(await E(tokenIssuer).isLive(claimPayment), true); // any particular reason for isLive check? getAmountOf will do that.
+  t.deepEqual(await E(tokenIssuer).getAmountOf(claimPayment), expectedPayout);
+};
 /** @import { Amount, AssetKind, Brand } from '@agoric/ertp/src/types.js'; */
 const filename = new URL(import.meta.url).pathname;
 const dirname = path.dirname(filename);
@@ -160,11 +213,13 @@ const makeTestContext = async t => {
     'c1-ownable-Airdrop',
   );
 
-  return {
+  t.context = {
+    ...t.context,
     primaryPurse: AIRDROP_PURSE,
     makeStartOpts,
     airdropInstallation,
     instance,
+    publicFacet: instance.publicFacet,
   };
 };
 
@@ -184,7 +239,15 @@ const setupPurseNotifier = async purse => {
 };
 
 test('airdrop claim :: eligible participant', async t => {
-  const before = t.context;
   await makeTestContext(t);
-  await t.is(before, t.context);
+
+  const { publicFacet } = await t.context;
+
+  t.is(defaultClaimaint, {});
+  await simulateClaim(
+    t,
+    await E(publicFacet).makeClaimInvitation(),
+    memes(1000n),
+    defaultClaimaint,
+  );
 });
