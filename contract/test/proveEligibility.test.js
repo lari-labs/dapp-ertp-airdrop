@@ -16,11 +16,6 @@ import { TimeIntervals } from '../src/airdrop/helpers/time.js';
 import { createDistributionConfig } from './utils.js';
 import { setup } from './setupBasicMints.js';
 
-const naiveAddressCreator = initialId => {
-  initialId += 1;
-  return string => `agoric123445${string}-${initialId}`;
-};
-
 const head = ([x]) => x;
 const parseAccountInfo = ({ pubkey, address }) => ({
   pubkey: pubkey.key,
@@ -28,19 +23,21 @@ const parseAccountInfo = ({ pubkey, address }) => ({
 });
 
 const defaultClaimaint = {
+  // @ts-ignore
   ...parseAccountInfo(head(accounts)),
   proof: head(TEST_TREE_DATA.proofs),
 };
-const makeAddress = naiveAddressCreator(0);
 const simulateClaim = async (
   t,
   invitation,
   expectedPayout,
   claimAccountDetails = defaultClaimaint,
 ) => {
+  // claimAccountDetails object holds values that are passed into the offer as offerArgs
+  // proof should be used to verify proof against tree (e.g. tree.verify(proof, leafValue, hash) where tree is the merkletree, leafValue is pubkey value, and root hash of tree)
+  // address is used in conjunction with namesByAddress/namesByAddressAdmin to send tokens to claimain (see https://docs.agoric.com/guides/integration/name-services.html#namesbyaddress-namesbyaddressadmin-and-depositfacet-per-account-namespace)
   const { pubkey, address, proof } = claimAccountDetails;
 
-  t.is(pubkey, proof);
   console.log({
     context: t.context,
     invitation,
