@@ -203,6 +203,12 @@ test.skip('prepareAirdrop', async t => {
   await airdropPurse.deposit(issuerKit.mint.mintPayment(TOTAL_AIRDROP_SUPPLY));
 
   t.deepEqual(airdropPurse.getCurrentAmount(), airdroplets(1_000_000n));
+
+  /**
+   * Description placeholder
+   *
+   * @type {{ customTerms: { name: string; rootHash: string; claimWindowLength: bigint; }; privateArgs: { claimWindowStartTime: any; distributionSchedule: Array; purse: import('@agoric/ertp/src/types.js').Purse; timer: any; }; }}
+   */
   const startOpts = {
     customTerms: {
       name: 'memecoinAirdrop',

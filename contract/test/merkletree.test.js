@@ -3,7 +3,7 @@
 import { test as anyTest } from './prepare-test-env-ava.js';
 import { MerkleTree } from 'merkletreejs';
 import { sha256 } from '@noble/hashes/sha256';
-import { accounts } from './data/agoric.accounts.js';
+import { accounts, pubkeys, testTree } from './data/agoric.accounts.js';
 import { compose } from '../src/airdrop/helpers/objectTools.js';
 
 /** @type {import('ava').TestFn<Awaited<ReturnType<makeBundleCacheContext>>>} */
@@ -32,15 +32,15 @@ const getProof = x => value => x.getProof(value);
 
 const getRootHash = compose(toHexidecimal, getRoot);
 
-test('merkletree operations', t => {
-  const pubkeys = mapWithTier(accounts).map(getPubkeyValue).map(makeSha256Hash);
-
-  const testTree = new MerkleTree(
-    pubkeys,
-    makeSha256Hash,
-    // {duplicateOdd: true },
+const merkleHashAssertions = t => hash => {
+  t.deepEqual(
+    hash.length === 66,
+    true,
+    'merkletree should always create a fixed-length root hash',
   );
+};
 
+test('merkletree operations', t => {
   const getLength = ({ length }) => length;
   const getProofFromTree = getProof(testTree);
 

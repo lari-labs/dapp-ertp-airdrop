@@ -46,7 +46,7 @@ export const privateArgsShape = harden({
 });
 
 export const customTermsShape = harden({
-  rootHash: M.any(),
+  hash: M.opt(M.string()),
   startTime: RelativeTimeRecordShape,
   endTime: M.or(RelativeTimeRecordShape, M.null()),
   basePayoutQuantity: AmountShape,
@@ -92,14 +92,13 @@ export const start = async (zcf, privateArgs, baggage) => {
   /** @type {ContractTerms} */
   const {
     startTime,
-    rootHash,
+    hash,
     // schedule: distributionSchedule,
     endTime,
     tokenName = 'Airdroplets',
     brands: { Token: tokenBrand },
     issuers: { Token: tokenIssuer },
   } = zcf.getTerms();
-  debugger;
   // const tokenMint = zcf.makeZCFMint(tokenName);
 
   const basePayout = AmountMath.make(tokenBrand, 1000n);

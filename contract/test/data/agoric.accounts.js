@@ -1,3 +1,30 @@
+import { MerkleTree } from 'merkletreejs';
+import { sha256 } from '@noble/hashes/sha256';
+import { compose } from '../../src/airdrop/helpers/objectTools.js';
+
+const hashInput = algo => data => algo(data);
+const makeSha256Hash = hashInput(sha256);
+const getProp = prop => object => object[prop];
+const getPubkey = getProp('pubkey');
+const getKey = getProp('key');
+const withTier = tierFn => o => ({
+  ...o,
+  tier: tierFn(),
+});
+
+const generateInt = x => () => Math.floor(Math.random() * (x + 1));
+const mapper = fn => array => array.map(fn);
+
+const mapWithTier = mapper(withTier(generateInt));
+
+const getPubkeyValue = compose(getKey, getPubkey);
+
+const toHexString = value => value.toString('hex');
+const getRoot = x => x.getRoot();
+const getProof = x => value => x.getProof(value);
+
+const getRootHash = compose(toHexString, getRoot);
+
 const accounts = [
   {
     name: 'tg-oracle',
@@ -64,4 +91,18 @@ const accounts = [
   },
 ];
 
-export { accounts };
+const pubkeys = mapWithTier(accounts).map(getPubkeyValue).map(makeSha256Hash);
+
+const tree1 = new MerkleTree(
+  pubkeys,
+  makeSha256Hash,
+  // {duplicateOdd: true },
+);
+
+const TEST_TREE_DATA = {
+  tree: tree1,
+  rootHash: getRootHash(tree1),
+  leaves: pubkeys,
+};
+const { tree: testTree } = TEST_TREE_DATA;
+export { accounts, pubkeys, testTree, TEST_TREE_DATA };
