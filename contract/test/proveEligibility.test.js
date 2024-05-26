@@ -3,18 +3,31 @@
 import { test as anyTest } from './airdropData/prepare-test-env-ava.js';
 import { createRequire } from 'module';
 import path from 'path';
-import { E } from '@endo/far';
+import { E, Far } from '@endo/far';
 import { AmountMath } from '@agoric/ertp/src/amountMath.js';
 import { TimeMath } from '@agoric/time';
 // ??? import { Id, IO, Task } from '../src/airdrop/adts/monads.js';
 import { bootAndInstallBundles } from './boot-tools.js';
 import { makeBundleCacheContext } from '../tools/bundle-tools.js';
 
+/**
+ * 1. add getTree and verifyProof method to TreeRemotable
+ * 2. verify validity proof against merkle root
+ */
 import '@agoric/store/exported.js';
-import { accounts, pubkeys, TEST_TREE_DATA } from './data/agoric.accounts.js';
+import {
+  accounts,
+  pubkeys,
+  TEST_TREE_DATA,
+  testTree,
+} from './data/agoric.accounts.js';
 import { TimeIntervals } from '../src/airdrop/helpers/time.js';
 import { createDistributionConfig } from './utils.js';
 import { setup } from './setupBasicMints.js';
+import { Id } from '../src/airdrop/adts/monads.js';
+import { compose } from '../src/airdrop/helpers/objectTools.js';
+import { makeMarshal } from '@endo/marshal';
+import { createClaimSuccessMsg } from '../src/airdrop/helpers/messages.js';
 
 const head = ([x]) => x;
 const parseAccountInfo = ({ pubkey, address }) => ({
@@ -27,30 +40,42 @@ const defaultClaimaint = {
   ...parseAccountInfo(head(accounts)),
   proof: head(TEST_TREE_DATA.proofs),
 };
+
 const simulateClaim = async (
   t,
   invitation,
   expectedPayout,
   claimAccountDetails = defaultClaimaint,
 ) => {
+  const marshaller = makeMarshal();
+  console.log('inside simulateClaim');
+  const claimerRemotable = Far('claimer details', {
+    getProof() {
+      return claimAccountDetails.proof;
+    },
+  });
   // claimAccountDetails object holds values that are passed into the offer as offerArgs
   // proof should be used to verify proof against tree (e.g. tree.verify(proof, leafValue, hash) where tree is the merkletree, leafValue is pubkey value, and root hash of tree)
   // address is used in conjunction with namesByAddress/namesByAddressAdmin to send tokens to claimain (see https://docs.agoric.com/guides/integration/name-services.html#namesbyaddress-namesbyaddressadmin-and-depositfacet-per-account-namespace)
   const { pubkey, address, proof } = claimAccountDetails;
 
-  console.log({
-    context: t.context,
-    invitation,
-    expectedPayout,
-    pubkey,
-    proof,
-    defaultClaimaint,
-  });
   const { zoe, memeIssuer: tokenIssuer } = await t.context;
-  /** @type {UserSeat} */
-  const claimSeat = await E(zoe).offer(invitation, undefined, undefined, {
+
+  const offerArgsObject = harden({
     ...claimAccountDetails,
+    proof: Far('proof', {
+      getProof() {
+        return claimAccountDetails.proof;
+      },
+    }),
   });
+  /** @type {UserSeat} */
+  const claimSeat = await E(zoe).offer(
+    invitation,
+    undefined,
+    undefined,
+    marshaller.toCapData(offerArgsObject),
+  );
 
   t.log('------------ testing claim capabilities -------');
   t.log('-----------------------------------------');
@@ -137,6 +162,25 @@ test('airdropRanges object', async t => {
 export const makeRelTimeMaker = brand => nat =>
   harden({ timerBrand: brand, relValue: nat });
 
+const PurseHolder = purse => ({
+  purse,
+  deposit(payment) {
+    console.log('inside deposit', this.purse);
+    this.purse.deposit(payment);
+    return PurseHolder(this.purse);
+  },
+  checkBalance() {
+    console.log('inside checkBalanace', this.purse);
+    return this.purse.getCurrentAmount();
+  },
+  makePayment(amount) {
+    return this.purse.withdraw(amount);
+  },
+});
+
+const mintToPurse = mint => amount => purse =>
+  purse.deposit(mint.mintPayment(amount));
+const mintMemesToPurse = mintToPurse(memeMint);
 const makeTestContext = async t => {
   const bootKit = await bootAndInstallBundles(t, bundleRoots);
   console.log({ bootKit });
@@ -151,6 +195,16 @@ const makeTestContext = async t => {
   const TOTAL_SUPPLY = memes(10_000_000n);
 
   const createMemeTokenDistributionSchedule = createDistributionConfig();
+
+  const MemePurse = PurseHolder(memeIssuer.makeEmptyPurse());
+
+  // t.deepEqual(
+  //   await MemePurse.map(x => x.deposit(memeMint.mintPayment(memes(10_000n)))),
+  //   MemePurse.inspect(),
+  // );
+
+  mintMemesToPurse(memes(500_000n))(MemePurse);
+  t.deepEqual(MemePurse.checkBalance(), memes(500_000n));
 
   const AIRDROP_PAYMENT = memeMint.mintPayment(TOTAL_SUPPLY);
   const AIRDROP_PURSE = memeIssuer.makeEmptyPurse();
@@ -190,14 +244,37 @@ const makeTestContext = async t => {
     purce: AIRDROP_PURSE,
     timer,
   };
+
+  const makeTreeRemotable = (tree, rootHash) =>
+    Far('Merkle Tree', {
+      getTree: () => tree,
+      getRootHash: () => rootHash,
+      getVerificationFn() {
+        const [merkleTree, merkleRoot] = [this.getTree(), this.getRootHash()];
+
+        console.log({ merkleTree, merkleRoot });
+        return (proof, nodeValue) => {
+          const result = tree.verify(proof, nodeValue, rootHash);
+          console.log('PROOF RESULT:::', { result, proof, nodeValue });
+          return result;
+        };
+      },
+    });
+  const marshaller = makeMarshal();
   const makeStartOpts = ({
     customTerms = defaultCustomTerms,
     privateArgs = defaultPrivateArgs,
   }) => ({ ...harden(customTerms), ...harden(privateArgs) });
+
+  const testTreeRemotable = makeTreeRemotable(
+    TEST_TREE_DATA.tree,
+    TEST_TREE_DATA.rootHash,
+  );
   const instance = await E(zoe).startInstance(
     airdropInstallation,
     harden({ Token: memeIssuer }),
     harden({
+      TreeRemotable: testTreeRemotable,
       hash: TEST_TREE_DATA.rootHash,
       basePayoutQuantity: memes(ONE_THOUSAND),
       startTime: relTimeMaker(TimeIntervals.SECONDS.ONE_DAY * 7n),
@@ -205,6 +282,7 @@ const makeTestContext = async t => {
     }),
     harden({
       purse: AIRDROP_PURSE,
+      bonusPurse: MemePurse.purse,
       timer,
     }),
     'c1-ownable-Airdrop',
@@ -212,7 +290,13 @@ const makeTestContext = async t => {
 
   t.context = {
     ...t.context,
+    invitationIssuer,
+    invitationBrand,
+    memeIssuer,
+    zoe,
+    timer,
     primaryPurse: AIRDROP_PURSE,
+    testTreeRemotable,
     makeStartOpts,
     airdropInstallation,
     instance,
@@ -234,17 +318,106 @@ const setupPurseNotifier = async purse => {
     },
   };
 };
+const trace = label => value => {
+  console.log(label, '::::', value);
+  return value;
+};
+test('airdrop purses', async t => {
+  const { initialSupply, bonusSupply } = makeMemesSupply(
+    1_000_000n,
+    1_500_000n,
+  );
+
+  const [primaryPurse, secondaryPurse] = [
+    memeIssuer.makeEmptyPurse().deposit(memeMint.mintPayment(initialSupply)),
+    memeIssuer.makeEmptyPurse().deposit(memeMint.mintPayment(bonusSupply)),
+  ]
+    .map(PurseHolder)
+    .map(Id);
+
+  const getProp = prop => obj => obj[prop];
+  const getValue = getProp('value');
+  const getPurse = getProp('purse');
+
+  const getBalance = compose(getPurse, getValue);
+
+  t.deepEqual([primaryPurse, secondaryPurse].map(getBalance), [
+    initialSupply,
+    bonusSupply,
+  ]);
+});
+
+const handleValidateProof =
+  (tree = TEST_TREE_DATA.tree, hash = TEST_TREE_DATA.rootHash) =>
+  (proof = TEST_TREE_DATA.proofs[0], nodeValue = TEST_TREE_DATA.leaves[0]) =>
+    tree.verify(proof, nodeValue, hash);
+
+test('merkle tree verification', t => {
+  const verifyAgainstTestTree = handleValidateProof();
+
+  t.deepEqual(
+    verifyAgainstTestTree(),
+    true,
+    'verifyAgainstTestTree function given default arguments, should return true',
+  );
+
+  t.deepEqual(
+    verifyAgainstTestTree(TEST_TREE_DATA.proofs[1], accounts[1].pubkey.key),
+    true,
+    'handleValidateProof function given a proof and its corresponding account should return true',
+  );
+
+  t.deepEqual(
+    verifyAgainstTestTree(TEST_TREE_DATA.proofs[1], 'notarealpubkey'),
+    false,
+    'handleValidateProof function given proof and a pubkey value that does not exist in the tree should return false',
+  );
+});
 
 test('airdrop claim :: eligible participant', async t => {
   await makeTestContext(t);
 
-  const { publicFacet } = await t.context;
+  const { publicFacet, timer, testTreeRemotable } = await t.context;
 
-  t.is(defaultClaimaint, {});
+  const validateFn = await E(testTreeRemotable).getVerificationFn();
+
+  t.deepEqual(
+    validateFn(TEST_TREE_DATA.proofs[0], accounts[0].pubkey.key),
+    true,
+    'TreeRemotable should expose function that properly verifies a proof against a Merkle tree',
+  );
+  await E(timer).advanceTo(2719838800n);
+
   await simulateClaim(
     t,
     await E(publicFacet).makeClaimInvitation(),
     memes(1000n),
-    defaultClaimaint,
+    {
+      proof: TEST_TREE_DATA.proofs[0],
+      pubkey: accounts[0].pubkey.key,
+      address: accounts[0].address,
+    },
+  );
+
+  await simulateClaim(
+    t,
+    await E(publicFacet).makeClaimInvitation(),
+    memes(1000n),
+    {
+      proof: TEST_TREE_DATA.proofs[2],
+      pubkey: accounts[2].pubkey.key,
+      address: accounts[2].address,
+    },
+  );
+
+  await simulateClaim(
+    t,
+    await E(publicFacet).makeClaimInvitation(),
+    memes(1000n),
+    {
+      proof: TEST_TREE_DATA.proofs[0],
+      pubkey: accounts[0].pubkey.key,
+      address: accounts[0].address,
+    },
   );
 });

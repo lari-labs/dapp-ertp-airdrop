@@ -20,6 +20,7 @@ import {
 import { makeStateMachine } from './helpers/stateMachine.js';
 import { createClaimSuccessMsg } from './helpers/messages.js';
 import { objectToMap } from './helpers/objectTools.js';
+import { makeMarshal } from '@endo/marshal';
 
 const cancelTokenMaker = makeCancelTokenMaker('airdrop-campaign');
 
@@ -41,7 +42,9 @@ const { OPEN, EXPIRED, PREPARED, INITIALIZED, RESTARTING } = AIRDROP_STATES;
 /** @import { ContractMeta } from '../@types/zoe-contract-facet'; */
 
 export const privateArgsShape = harden({
+  TreeRemotable: M.remotable('Merkle Tree'),
   purse: PurseShape,
+  bonusPurse: PurseShape,
   timer: TimerShape,
 });
 
@@ -87,11 +90,13 @@ export const start = async (zcf, privateArgs, baggage) => {
   /** @type { Zone } */
   const zone = makeDurableZone(baggage, 'rootZone');
 
-  const { purse: airdropPurse, timer } = privateArgs;
+  const marshaller = makeMarshal();
+  const { purse: airdropPurse, bonusPurse, timer } = privateArgs;
 
   /** @type {ContractTerms} */
   const {
     startTime,
+    TreeRemotable,
     hash,
     // schedule: distributionSchedule,
     endTime,
@@ -108,6 +113,8 @@ export const start = async (zcf, privateArgs, baggage) => {
   await objectToMap(
     {
       // exchange this for a purse created from ZCFMint
+      TreeRemotable,
+      bonusPurse,
       purse: airdropPurse,
       tokenIssuer,
       startTime: createFutureTs(t0, startTime),
@@ -125,6 +132,7 @@ export const start = async (zcf, privateArgs, baggage) => {
   ].map(getKey(baggage));
 
   console.log('AIRDROP STATUS', claimedAccountsStore);
+  console.log('baggage::::', { keys: [...baggage.keys()] });
   airdropStatus.init('currentStatus', INITIALIZED);
 
   const stateMachine = makeStateMachine(
@@ -161,7 +169,8 @@ export const start = async (zcf, privateArgs, baggage) => {
      * @param {Purse} tokenPurse
      * @param {CopySet} store
      */
-    (tokenPurse, store) => ({
+    (tokenPurse, store, tree) => ({
+      tree,
       /** @type { object } */
       currentCancelToken: null,
       currentEpochEndTime: 0n,
@@ -201,7 +210,7 @@ export const start = async (zcf, privateArgs, baggage) => {
         getAirdropTokenIssuer() {
           return tokenIssuer;
         },
-        makeClaimInvitation() {
+        async makeClaimInvitation() {
           assert(
             airdropStatus.get('currentStatus') === AIRDROP_STATES.OPEN,
             'Claim attempt failed.',
@@ -215,13 +224,28 @@ export const start = async (zcf, privateArgs, baggage) => {
             async (seat, offerArgs) => {
               const amount = await E(tokenIssuer).getAmountOf(payment);
 
-              console.log({ offerArgs });
+              const offerArgsInput = marshaller.fromCapData(offerArgs);
+              const proof = await E(offerArgsInput.proof).getProof();
+              const validateFn = await E(TreeRemotable).getVerificationFn();
+
+              const result = validateFn(proof, offerArgsInput.pubkey);
+              assert(
+                result,
+                `Failed to verify the existence of pubkey ${offerArgsInput.pubkey}.`,
+              );
               // TODO: add assertion checking whether users exists
-              claimedAccountsStore.add(offerArgs.walletAddress, {
+
+              assert(
+                !claimedAccountsStore.has(offerArgsInput.address),
+                `Allocation for address ${offerArgsInput.address} has already been claimed.`,
+              );
+              claimedAccountsStore.add(offerArgsInput.address, {
                 amount,
               });
 
-              console.log([...claimedAccountsStore.entries()]);
+              console.log('Claimed accounts::', [
+                ...claimedAccountsStore.keys(),
+              ]);
 
               await depositToSeat(
                 zcf,

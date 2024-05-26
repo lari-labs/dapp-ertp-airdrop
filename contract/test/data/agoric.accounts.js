@@ -91,8 +91,7 @@ const accounts = [
   },
 ];
 
-const pubkeys = mapWithTier(accounts).map(getPubkeyValue).map(makeSha256Hash);
-
+const pubkeys = mapWithTier(accounts).map(getPubkeyValue);
 const tree1 = new MerkleTree(
   pubkeys,
   makeSha256Hash,
