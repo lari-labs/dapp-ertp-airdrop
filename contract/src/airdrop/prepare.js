@@ -12,6 +12,7 @@ import {
 import { TimeMath, RelativeTimeRecordShape } from '@agoric/time';
 import { TimerShape } from '@agoric/zoe/src/typeGuards.js';
 import { depositToSeat } from '@agoric/zoe/src/contractSupport/zoeHelpers.js';
+import { makeMarshal } from '@endo/marshal';
 import { makeWaker } from './helpers/time.js';
 import {
   handleFirstIncarnation,
@@ -20,7 +21,6 @@ import {
 import { makeStateMachine } from './helpers/stateMachine.js';
 import { createClaimSuccessMsg } from './helpers/messages.js';
 import { objectToMap } from './helpers/objectTools.js';
-import { makeMarshal } from '@endo/marshal';
 
 const cancelTokenMaker = makeCancelTokenMaker('airdrop-campaign');
 
@@ -32,6 +32,7 @@ const AIRDROP_STATES = {
   CLOSED: 'claiming-closed',
   RESTARTING: 'restarting',
 };
+
 const { OPEN, EXPIRED, PREPARED, INITIALIZED, RESTARTING } = AIRDROP_STATES;
 
 /** @import { CopySet } from '@endo/patterns'; */
@@ -108,8 +109,10 @@ export const start = async (zcf, privateArgs, baggage) => {
 
   const basePayout = AmountMath.make(tokenBrand, 1000n);
 
-  const t0 = await E(timer).getCurrentTimestamp();
-
+  const [t0, handleProofVerification] = await Promise.all([
+    E(timer).getCurrentTimestamp(),
+    E(TreeRemotable).getVerificationFn(),
+  ]);
   await objectToMap(
     {
       // exchange this for a purse created from ZCFMint
@@ -169,8 +172,7 @@ export const start = async (zcf, privateArgs, baggage) => {
      * @param {Purse} tokenPurse
      * @param {CopySet} store
      */
-    (tokenPurse, store, tree) => ({
-      tree,
+    (tokenPurse, store) => ({
       /** @type { object } */
       currentCancelToken: null,
       currentEpochEndTime: 0n,
@@ -226,14 +228,6 @@ export const start = async (zcf, privateArgs, baggage) => {
 
               const offerArgsInput = marshaller.fromCapData(offerArgs);
               const proof = await E(offerArgsInput.proof).getProof();
-              const validateFn = await E(TreeRemotable).getVerificationFn();
-
-              const result = validateFn(proof, offerArgsInput.pubkey);
-              assert(
-                result,
-                `Failed to verify the existence of pubkey ${offerArgsInput.pubkey}.`,
-              );
-              // TODO: add assertion checking whether users exists
 
               assert(
                 !claimedAccountsStore.has(offerArgsInput.address),
@@ -242,10 +236,10 @@ export const start = async (zcf, privateArgs, baggage) => {
               claimedAccountsStore.add(offerArgsInput.address, {
                 amount,
               });
-
-              console.log('Claimed accounts::', [
-                ...claimedAccountsStore.keys(),
-              ]);
+              assert(
+                handleProofVerification(proof, offerArgsInput.pubkey),
+                `Failed to verify the existence of pubkey ${offerArgsInput.pubkey}.`,
+              );
 
               await depositToSeat(
                 zcf,

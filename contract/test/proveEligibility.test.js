@@ -17,6 +17,7 @@ import { makeBundleCacheContext } from '../tools/bundle-tools.js';
 import '@agoric/store/exported.js';
 import {
   accounts,
+  preparedAccounts,
   pubkeys,
   TEST_TREE_DATA,
   testTree,
@@ -28,6 +29,17 @@ import { Id } from '../src/airdrop/adts/monads.js';
 import { compose } from '../src/airdrop/helpers/objectTools.js';
 import { makeMarshal } from '@endo/marshal';
 import { createClaimSuccessMsg } from '../src/airdrop/helpers/messages.js';
+import { view } from '../src/airdrop/helpers/lenses.js';
+
+const makeOfferArgsForTest =
+  ({ proofs = TEST_TREE_DATA.proofs, keysInTree = TEST_TREE_DATA.leaves }) =>
+  index => ({
+    proof: proofs[index],
+    pubkey: keysInTree[index],
+    accountAddress: accounts[index].address,
+  });
+
+const getTestTreeOfferArgs = makeOfferArgsForTest(TEST_TREE_DATA);
 
 const head = ([x]) => x;
 const parseAccountInfo = ({ pubkey, address }) => ({
@@ -349,7 +361,7 @@ test('airdrop purses', async t => {
 
 const handleValidateProof =
   (tree = TEST_TREE_DATA.tree, hash = TEST_TREE_DATA.rootHash) =>
-  (proof = TEST_TREE_DATA.proofs[0], nodeValue = TEST_TREE_DATA.leaves[0]) =>
+  (proof = preparedAccounts[0].proof, nodeValue = preparedAccounts[0].pubkey) =>
     tree.verify(proof, nodeValue, hash);
 
 test('merkle tree verification', t => {
@@ -362,17 +374,27 @@ test('merkle tree verification', t => {
   );
 
   t.deepEqual(
-    verifyAgainstTestTree(TEST_TREE_DATA.proofs[1], accounts[1].pubkey.key),
+    verifyAgainstTestTree(
+      preparedAccounts[1].proof,
+      preparedAccounts[1].pubkey,
+    ),
     true,
     'handleValidateProof function given a proof and its corresponding account should return true',
   );
 
   t.deepEqual(
-    verifyAgainstTestTree(TEST_TREE_DATA.proofs[1], 'notarealpubkey'),
+    verifyAgainstTestTree(preparedAccounts[0].proof, 'notarealpubkey'),
     false,
     'handleValidateProof function given proof and a pubkey value that does not exist in the tree should return false',
   );
 });
+
+const traceAcc = trace('accumlator value');
+const accumulateToCeiling = ceiling =>
+  Array.from({ length: ceiling }, (_, i) => i).reduce(
+    (acc, current) => (acc >= ceiling ? acc : acc.concat()),
+    [],
+  );
 
 test('airdrop claim :: eligible participant', async t => {
   await makeTestContext(t);
@@ -380,9 +402,10 @@ test('airdrop claim :: eligible participant', async t => {
   const { publicFacet, timer, testTreeRemotable } = await t.context;
 
   const validateFn = await E(testTreeRemotable).getVerificationFn();
+  const [first, second, third, ...rest] = preparedAccounts;
 
   t.deepEqual(
-    validateFn(TEST_TREE_DATA.proofs[0], accounts[0].pubkey.key),
+    validateFn(first.proof, first.pubkey),
     true,
     'TreeRemotable should expose function that properly verifies a proof against a Merkle tree',
   );
@@ -392,32 +415,22 @@ test('airdrop claim :: eligible participant', async t => {
     t,
     await E(publicFacet).makeClaimInvitation(),
     memes(1000n),
-    {
-      proof: TEST_TREE_DATA.proofs[0],
-      pubkey: accounts[0].pubkey.key,
-      address: accounts[0].address,
-    },
+    first,
+  );
+
+  const getPubkey = view();
+
+  await simulateClaim(
+    t,
+    await E(publicFacet).makeClaimInvitation(),
+    memes(1000n),
+    second,
   );
 
   await simulateClaim(
     t,
     await E(publicFacet).makeClaimInvitation(),
     memes(1000n),
-    {
-      proof: TEST_TREE_DATA.proofs[2],
-      pubkey: accounts[2].pubkey.key,
-      address: accounts[2].address,
-    },
-  );
-
-  await simulateClaim(
-    t,
-    await E(publicFacet).makeClaimInvitation(),
-    memes(1000n),
-    {
-      proof: TEST_TREE_DATA.proofs[0],
-      pubkey: accounts[0].pubkey.key,
-      address: accounts[0].address,
-    },
+    third,
   );
 });
