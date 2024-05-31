@@ -36,7 +36,7 @@ const nodeRequire = createRequire(import.meta.url);
 
 const bundleRoots = {
   // postalSvc: nodeRequire.resolve('../src/postalSvc.js'),
-  airdropCampaign: nodeRequire.resolve('../src/airdropCampaign.js'),
+  airdropCampaign: nodeRequire.resolve('../src/airdrop.contract.js'),
 };
 
 test.before(async t => (t.context = await makeBundleCacheContext(t)));

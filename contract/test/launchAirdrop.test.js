@@ -30,7 +30,7 @@ const nodeRequire = createRequire(import.meta.url);
 const airdropName = 'airdropCampaign';
 const bundleRoots = {
   // [contractName]: nodeRequire.resolve('../src/launchIt.js'),
-  [airdropName]: nodeRequire.resolve('../src/airdropCampaign.js'),
+  [airdropName]: nodeRequire.resolve('../src/airdrop.contract.js'),
   // contractStarter: nodeRequire.resolve('../src/contractStarter.js'),
 };
 
