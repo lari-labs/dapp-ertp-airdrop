@@ -18,13 +18,10 @@ import {
 import { oneDay } from '../src/airdrop/helpers/time.js';
 import { createHash } from 'crypto';
 import { createRequire } from 'module';
-import {
-  bootAndInstallBundles,
-  getBundleId,
-  makeBundleCacheContext,
-} from './boot-tools.js';
+import { bootAndInstallBundles } from './boot-tools.js';
 import { createDistributionConfig } from './utils.js';
 import { makeCopySet } from '@endo/patterns';
+import { makeBundleCacheContext } from '../tools/bundle-tools.js';
 
 const makeSha256 = input => createHash('sha256').update(input).digest('hex');
 

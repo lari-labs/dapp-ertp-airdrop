@@ -9,11 +9,7 @@ import { makeCopyBagFromElements, makeCopySet } from '@endo/patterns';
 import { makeWalletFactory } from './wallet-tools.js';
 // ??? import { Id, IO, Task } from '../src/airdrop/adts/monads.js';
 import { launcherLarry, starterSam } from './market-actors.js';
-import {
-  makeBundleCacheContext,
-  bootAndInstallBundles,
-  getBundleId,
-} from './boot-tools.js';
+import { bootAndInstallBundles, getBundleId } from './boot-tools.js';
 // import {
 //   installContractStarter,
 //   startContractStarter,
@@ -23,6 +19,7 @@ import { makeClientMarshaller } from './marshalTables.js';
 import { documentStorageSchema } from './airdropData/storageDoc.js';
 import '@agoric/store/exported.js';
 import { createDistributionConfig } from './utils.js';
+import { makeBundleCacheContext } from '../tools/bundle-tools.js';
 
 const nodeRequire = createRequire(import.meta.url);
 
