@@ -7,7 +7,7 @@ import { E, Far } from '@endo/far';
 import { AmountMath } from '@agoric/ertp/src/amountMath.js';
 import { TimeMath } from '@agoric/time';
 // ??? import { Id, IO, Task } from '../src/airdrop/adts/monads.js';
-import { bootAndInstallBundles } from './boot-tools.js';
+import { bootAndInstallBundles } from '../tools/boot-tools.js';
 import { makeBundleCacheContext } from '../tools/bundle-tools.js';
 
 /**
@@ -120,7 +120,7 @@ test.before(async t => (t.context = await makeBundleCacheContext(t)));
 const ONE_THOUSAND = 1000n;
 const nodeRequire = createRequire(import.meta.url);
 const makeBundleId = ({ endoZipBase64Sha512 }) => `b1-${endoZipBase64Sha512}`;
-const root = `${dirname}/../../src/airdrop/prepare.js`;
+const root = `${dirname}/../../src/airdrop/airdropKitCreator.js`;
 const { memeMint, memeIssuer, memeKit, memes, moola, zoe, vatAdminState } =
   setup();
 
@@ -404,6 +404,16 @@ test('airdrop claim :: eligible participant', async t => {
   const validateFn = await E(testTreeRemotable).getVerificationFn();
   const [first, second, third, ...rest] = preparedAccounts;
 
+  await preparedAccounts.map(({ proof }, index) =>
+    proof.map(({ data }) =>
+      t.deepEqual(
+        Buffer.isBuffer(data),
+        true,
+        `proof generated for account ${index} should be a Buffer.`,
+      ),
+    ),
+  );
+
   t.deepEqual(
     validateFn(first.proof, first.pubkey),
     true,
@@ -418,15 +428,12 @@ test('airdrop claim :: eligible participant', async t => {
     first,
   );
 
-  const getPubkey = view();
-
   await simulateClaim(
     t,
     await E(publicFacet).makeClaimInvitation(),
     memes(1000n),
     second,
   );
-
   await simulateClaim(
     t,
     await E(publicFacet).makeClaimInvitation(),
@@ -434,3 +441,11 @@ test('airdrop claim :: eligible participant', async t => {
     third,
   );
 });
+
+test.todo('compare cliam amounts for different tiers');
+
+test.todo('claim attempts after the last epoch has ended');
+
+test.todo('bonus mints');
+
+test.todo('token burning mechanisms');

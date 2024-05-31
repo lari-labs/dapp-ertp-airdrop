@@ -62,14 +62,8 @@ test('merkletree operations', t => {
 
   const proofs = pubkeys.map(getProofFromTree);
 
-  const checkProof = (merkleTree, rootHash) => (proof, leafValue) => {
-    console.log('CHECKING PROOF ::::::', {
-      leafValue,
-      testTree: { testTree, leave: testTree.hashFn(leafValue) },
-      hashedLeaf: makeSha256Hash(leafValue),
-    });
-    return merkleTree.verify(proof, leafValue, rootHash);
-  };
+  const checkProof = (merkleTree, rootHash) => (proof, leafValue) =>
+    merkleTree.verify(proof, leafValue, rootHash);
   const verifyProofAgainstTree = checkProof(
     testTree,
     testTree.getRoot().toString('hex'),

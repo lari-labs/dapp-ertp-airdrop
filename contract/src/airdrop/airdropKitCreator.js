@@ -32,7 +32,6 @@ const AIRDROP_STATES = {
   CLOSED: 'claiming-closed',
   RESTARTING: 'restarting',
 };
-
 const { OPEN, EXPIRED, PREPARED, INITIALIZED, RESTARTING } = AIRDROP_STATES;
 
 /** @import { CopySet } from '@endo/patterns'; */
@@ -40,7 +39,7 @@ const { OPEN, EXPIRED, PREPARED, INITIALIZED, RESTARTING } = AIRDROP_STATES;
 /** @import { TimerService, TimestampRecord } from '@agoric/time/src/types.js'; */
 /** @import { Baggage } from '@agoric/vat-data'; */
 /** @import { Zone } from '@agoric/base-zone'; */
-/** @import { ContractMeta } from '../@types/zoe-contract-facet'; */
+/** @import { ContractMeta } from '../@types/zoe-contract-facet.js'; */
 
 export const privateArgsShape = harden({
   TreeRemotable: M.remotable('Merkle Tree'),

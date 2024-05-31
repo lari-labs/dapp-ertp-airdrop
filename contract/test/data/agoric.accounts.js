@@ -8,11 +8,6 @@ const getProp = prop => object => object[prop];
 const getPubkey = getProp('pubkey');
 const getKey = getProp('key');
 
-const generateInt = x => () => Math.floor(Math.random() * (x + 1));
-const mapper = fn => array => array.map(fn);
-
-const getPubkeyValue = compose(getKey, getPubkey);
-
 const toHexString = value => value.toString('hex');
 const getRoot = x => x.getRoot();
 const getProof = tree => value => tree.getProof(value);
@@ -92,13 +87,6 @@ const accounts = [
   },
 ];
 
-const trace = label => value => {
-  console.log(label, '::::', value);
-  return value;
-};
-
-const getTierBetweenZeroAndFive = () => generateInt(5)();
-
 // Importing Either from the provided codebase
 const { Right, Left } = Either;
 
@@ -107,12 +95,6 @@ const concatenateProps = obj =>
   obj && obj.pubkey && obj.tier
     ? Right(`${obj.pubkey.key}${obj.tier}`)
     : Left('Invalid object structure');
-
-// Adding `tier` to each object
-const withTier = obj => ({
-  ...obj,
-  tier: getTierBetweenZeroAndFive().toString(),
-});
 
 // Processing array
 const processArray = array =>
@@ -137,32 +119,6 @@ const TEST_TREE_DATA = {
   leaves: pubkeys,
   proofs: pubkeys.map(getProof(tree1)),
 };
-
-// // Coyoneda implementation
-// const Coyoneda = (k, x) => ({
-//   map: f => Coyoneda(x => f(k(x)), x),
-//   run: F => F.map(k).ap(F.of(x)),
-//   extract: () => `Coyoneda(${k}, ${x})`,
-// });
-
-// // Static method to lift a functor into a Coyoneda
-// Coyoneda.lift = F => F.map(x => Coyoneda(x => x, x));
-
-// // Function to generate the `tier` value
-
-// // Property extraction function using Coyoneda
-// const concatenateProps3 = obj =>
-//   Coyoneda.lift([obj])
-//     .map(o => `${o.pubkey.key}${o.tier}`)
-//     .run([obj])
-//     .map(k => k(obj))[0];
-
-// // Processing array
-// const processArray2 = array =>
-//   array.map(obj => concatenateProps3(withTier(obj)));
-
-// const processArray22 = processArray2(accounts);
-// console.log(processArray22);
 
 const { tree: testTree, proofs } = TEST_TREE_DATA;
 const withProof = (o, i) => ({ ...o, proof: proofs[i], pubkey: pubkeys[i] });

@@ -2,7 +2,7 @@
 import { E, getInterfaceOf } from '@endo/far';
 import { makePromiseKit } from '@endo/promise-kit';
 import { AmountMath } from '@agoric/ertp/src/amountMath.js';
-import { allValues, mapValues, seatLike } from './wallet-tools.js';
+import { allValues, mapValues, seatLike } from '../tools/wallet-tools.js';
 
 const { entries, fromEntries, keys } = Object;
 const { Fail } = assert;
@@ -24,7 +24,7 @@ const { Fail } = assert;
 
 /**
  * @param {import('ava').ExecutionContext} t
- * @param {{ wallet: import('./wallet-tools.js').MockWallet }} mine
+ * @param {{ wallet: import('../tools/wallet-tools.js').MockWallet }} mine
  * @param { WellKnown & WellKnownKinds } wellKnown
  * @param {{
  *   rxAddr: string,
@@ -74,7 +74,7 @@ export const payerPete = async (
 
 /**
  * @param {import('ava').ExecutionContext} t
- * @param {{ wallet: import('./wallet-tools.js').MockWallet, }} mine
+ * @param {{ wallet: import('../tools/wallet-tools.js').MockWallet, }} mine
  * @param {WellKnown & WellKnownKinds} wellKnown
  * @param {{ toSend: AmountKeywordRecord }} shared
  */
@@ -115,7 +115,7 @@ export const receiverRose = async (t, { wallet }, wellKnown, { toSend }) => {
 
 /**
  * @param {import('ava').ExecutionContext} t
- * @param {{ wallet: import('./wallet-tools.js').MockWallet, }} mine
+ * @param {{ wallet: import('../tools/wallet-tools.js').MockWallet, }} mine
  * @param {{ toSend: AmountKeywordRecord }} shared
  */
 export const receiverRex = async (t, { wallet }, { toSend }) => {
@@ -314,7 +314,7 @@ export const airdropperAlice = async (t, mine, wellKnown) => {
 /**
  * @param {import('ava').ExecutionContext} t
  * @param {{
- *   wallet: import('./wallet-tools.js').MockWallet,
+ *   wallet: import('../tools/wallet-tools.js').MockWallet,
  * }} mine
  * @param { WellKnown & BoardAux} wellKnown
  */
@@ -624,7 +624,7 @@ export const agentCreate = async (...input) =>
 /**
  * @param {import('ava').ExecutionContext} t
  * @param {{
- *   wallet: import('./wallet-tools.js').MockWallet
+ *   wallet: import('../tools/wallet-tools.js').MockWallet
  * }} mine
  * @param {*} wellKnown
  */
@@ -747,7 +747,7 @@ export const launcherLarry = async (t, { wallet }, wellKnown) => {
 /**
  * @param {import('ava').ExecutionContext} t
  * @param {{
- *   wallet: import('./wallet-tools.js').MockWallet,
+ *   wallet: import('../tools/wallet-tools.js').MockWallet,
  *   ix: number,
  *   qty: bigint,
  * }} mine

@@ -6,14 +6,14 @@ import { E } from '@endo/far';
 import { AmountMath, AssetKind } from '@agoric/ertp/src/amountMath.js';
 import { makeIssuerKit } from '@agoric/ertp';
 import { makeCopyBagFromElements, makeCopySet } from '@endo/patterns';
-import { makeWalletFactory } from './wallet-tools.js';
+import { makeWalletFactory } from '../tools/wallet-tools.js';
 // ??? import { Id, IO, Task } from '../src/airdrop/adts/monads.js';
 import { launcherLarry, starterSam } from './market-actors.js';
 import {
   makeBundleCacheContext,
   bootAndInstallBundles,
   getBundleId,
-} from './boot-tools.js';
+} from '../tools/boot-tools.js';
 // import {
 //   installContractStarter,
 //   startContractStarter,
