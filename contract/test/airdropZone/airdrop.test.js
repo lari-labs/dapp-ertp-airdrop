@@ -255,7 +255,7 @@ const simulateClaim = async (
   expectedPayout,
   walletAddress = makeAddress('abcd'),
 ) => {
-  console.log({ context: t.context, invitation, expectedPayout });
+  console.log('simulateClaim', { expectedPayout });
   const { zoe, memeIssuer: tokenIssuer } = await t.context;
   /** @type {UserSeat} */
   const claimSeat = await E(zoe).offer(invitation, undefined, undefined, {
