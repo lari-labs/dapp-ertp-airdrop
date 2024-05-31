@@ -4,7 +4,7 @@
  */
 // @ts-check
 import test from 'ava';
-import { pubkeyToAddress } from '../src/check-sig.js';
+import { pubkeyToAddress } from '../../src/check-sig.js';
 
 const cases = [
   {
