@@ -70,7 +70,9 @@
   },
   "ava": {
     "files": [
-      "test/**/*.test.js"
+      "test/**/*.test.js",
+      "!test/xs/*.test.js",
+      "!test/crypto-xsnap.test.js"
     ]
   },
   "keywords": [],
