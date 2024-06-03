@@ -1,10 +1,10 @@
 /**
  * @file XS crypto test
- * run with: yarn ava-xs test/test-crypto-ava-xs.js
+ * run with: yarn ava-xs test/xs/crypto-ava-xs.test.js
  */
 // @ts-check
 import test from 'ava';
-import { pubkeyToAddress } from '../src/check-sig.js';
+import { pubkeyToAddress } from '../../src/check-sig.js';
 
 const cases = [
   {

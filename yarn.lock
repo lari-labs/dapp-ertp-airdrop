@@ -258,6 +258,20 @@
     anylogger "^0.21.0"
     jessie.js "^0.3.4"
 
+"@agoric/internal@0.4.0-u14.0", "@agoric/internal@^0.4.0-u14.0":
+  version "0.4.0-u14.0"
+  resolved "https://registry.yarnpkg.com/@agoric/internal/-/internal-0.4.0-u14.0.tgz#72040108fa3af5865e4b67d999a4249650f43979"
+  integrity sha512-i71iWb2n4PbzteKqZlCGrwC565HWhlRBDxkvWX3iAwDlV6SDj4r70p0BAeeE/YBe653/L0Cuhub7+nNyCZZTSg==
+  dependencies:
+    "@agoric/zone" "^0.2.3-u14.0"
+    "@endo/far" "0.2.18"
+    "@endo/marshal" "0.8.5"
+    "@endo/patterns" "0.2.2"
+    "@endo/promise-kit" "0.2.56"
+    "@endo/stream" "0.3.25"
+    anylogger "^0.21.0"
+    jessie.js "^0.3.2"
+
 "@agoric/internal@^0.3.2":
   version "0.3.2"
   resolved "https://registry.yarnpkg.com/@agoric/internal/-/internal-0.3.2.tgz#a1242947083ab46cbd34613add8bacbd0c9dc443"
@@ -272,19 +286,20 @@
     anylogger "^0.21.0"
     jessie.js "^0.3.2"
 
-"@agoric/internal@^0.4.0-u14.0":
-  version "0.4.0-u14.0"
-  resolved "https://registry.yarnpkg.com/@agoric/internal/-/internal-0.4.0-u14.0.tgz#72040108fa3af5865e4b67d999a4249650f43979"
-  integrity sha512-i71iWb2n4PbzteKqZlCGrwC565HWhlRBDxkvWX3iAwDlV6SDj4r70p0BAeeE/YBe653/L0Cuhub7+nNyCZZTSg==
+"@agoric/notifier@0.6.3-u14.0", "@agoric/notifier@^0.6.3-dev-8c14632.0", "@agoric/notifier@^0.6.3-u14.0":
+  version "0.6.3-u14.0"
+  resolved "https://registry.yarnpkg.com/@agoric/notifier/-/notifier-0.6.3-u14.0.tgz#a0ba91815bf96b524d12e95340f294d2f4d55a38"
+  integrity sha512-lYGO/Bq6VjTBJAyPrjljC0BOmD78+v0LX+9iQbbIuy8F8LtK/YZHse9o+R0ub49QihCBOqDAPoJ+xGoLl2Ursw==
   dependencies:
-    "@agoric/zone" "^0.2.3-u14.0"
+    "@agoric/assert" "^0.6.1-u11wf.0"
+    "@agoric/internal" "^0.4.0-u14.0"
+    "@agoric/store" "^0.9.3-u14.0"
+    "@agoric/swing-store" "^0.9.2-u14.0"
+    "@agoric/swingset-vat" "^0.32.3-u14.0"
+    "@agoric/vat-data" "^0.5.3-u14.0"
     "@endo/far" "0.2.18"
     "@endo/marshal" "0.8.5"
-    "@endo/patterns" "0.2.2"
     "@endo/promise-kit" "0.2.56"
-    "@endo/stream" "0.3.25"
-    anylogger "^0.21.0"
-    jessie.js "^0.3.2"
 
 "@agoric/notifier@^0.6.2":
   version "0.6.2"
@@ -300,21 +315,6 @@
     "@endo/far" "^0.2.18"
     "@endo/marshal" "^0.8.5"
     "@endo/promise-kit" "^0.2.56"
-
-"@agoric/notifier@^0.6.3-dev-8c14632.0", "@agoric/notifier@^0.6.3-u14.0":
-  version "0.6.3-u14.0"
-  resolved "https://registry.yarnpkg.com/@agoric/notifier/-/notifier-0.6.3-u14.0.tgz#a0ba91815bf96b524d12e95340f294d2f4d55a38"
-  integrity sha512-lYGO/Bq6VjTBJAyPrjljC0BOmD78+v0LX+9iQbbIuy8F8LtK/YZHse9o+R0ub49QihCBOqDAPoJ+xGoLl2Ursw==
-  dependencies:
-    "@agoric/assert" "^0.6.1-u11wf.0"
-    "@agoric/internal" "^0.4.0-u14.0"
-    "@agoric/store" "^0.9.3-u14.0"
-    "@agoric/swing-store" "^0.9.2-u14.0"
-    "@agoric/swingset-vat" "^0.32.3-u14.0"
-    "@agoric/vat-data" "^0.5.3-u14.0"
-    "@endo/far" "0.2.18"
-    "@endo/marshal" "0.8.5"
-    "@endo/promise-kit" "0.2.56"
 
 "@agoric/rpc@0.9.1-dev-f471a83.0":
   version "0.9.1-dev-f471a83.0"

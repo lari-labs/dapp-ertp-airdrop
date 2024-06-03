@@ -1,7 +1,7 @@
 // @ts-check
 import { E, getInterfaceOf } from '@endo/far';
 import { AmountMath } from '@agoric/ertp/src/amountMath.js';
-import { allValues, mapValues } from '../wallet-tools.js';
+import { allValues, mapValues } from '../../tools/wallet-tools.js';
 
 const { entries, fromEntries, keys } = Object;
 const { Fail } = assert;

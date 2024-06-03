@@ -1,1 +1,1 @@
-export { start } from './airdrop/prepare.js';
+export { start } from './airdrop/airdropKitCreator.js';

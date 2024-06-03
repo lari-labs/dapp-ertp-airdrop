@@ -137,7 +137,7 @@ const installBundle = async (fullPath, opts) => {
  *   whale?: string;
  *   progress?: typeof console.log;
  * }} opts
- * @returns {Promise<import('../test/wallet-tools.js').MockWallet>}
+ * @returns {Promise<import('./wallet-tools.js').MockWallet>}
  */
 export const provisionSmartWallet = async (
   address,
@@ -227,14 +227,14 @@ export const provisionSmartWallet = async (
     }
   }
 
-  /** @type {import('../test/wallet-tools.js').MockWallet['offers']} */
+  /** @type {import('./wallet-tools.js').MockWallet['offers']} */
   const offers = Far('Offers', {
     executeOffer,
     /** @param {string|number} offerId */
     tryExit: offerId => sendAction({ method: 'tryExitOffer', offerId }),
   });
 
-  /** @type {import('../test/wallet-tools.js').MockWallet['deposit']} */
+  /** @type {import('./wallet-tools.js').MockWallet['deposit']} */
   const deposit = Far('DepositFacet', {
     receive: async payment => {
       const brand = await E(payment).getAllegedBrand();
@@ -295,7 +295,7 @@ export const provisionSmartWallet = async (
     }
   }
 
-  /** @type {import('../test/wallet-tools.js').MockWallet['peek']} */
+  /** @type {import('./wallet-tools.js').MockWallet['peek']} */
   const peek = Far('Peek', { purseUpdates });
 
   return { offers, deposit, peek };

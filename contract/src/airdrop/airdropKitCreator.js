@@ -12,6 +12,7 @@ import {
 import { TimeMath, RelativeTimeRecordShape } from '@agoric/time';
 import { TimerShape } from '@agoric/zoe/src/typeGuards.js';
 import { depositToSeat } from '@agoric/zoe/src/contractSupport/zoeHelpers.js';
+import { makeMarshal } from '@endo/marshal';
 import { makeWaker } from './helpers/time.js';
 import {
   handleFirstIncarnation,
@@ -38,15 +39,17 @@ const { OPEN, EXPIRED, PREPARED, INITIALIZED, RESTARTING } = AIRDROP_STATES;
 /** @import { TimerService, TimestampRecord } from '@agoric/time/src/types.js'; */
 /** @import { Baggage } from '@agoric/vat-data'; */
 /** @import { Zone } from '@agoric/base-zone'; */
-/** @import { ContractMeta } from '../@types/zoe-contract-facet'; */
+/** @import { ContractMeta } from '../@types/zoe-contract-facet.js'; */
 
 export const privateArgsShape = harden({
+  TreeRemotable: M.remotable('Merkle Tree'),
   purse: PurseShape,
+  bonusPurse: PurseShape,
   timer: TimerShape,
 });
 
 export const customTermsShape = harden({
-  rootHash: M.any(),
+  hash: M.opt(M.string()),
   startTime: RelativeTimeRecordShape,
   endTime: M.or(RelativeTimeRecordShape, M.null()),
   basePayoutQuantity: AmountShape,
@@ -87,28 +90,33 @@ export const start = async (zcf, privateArgs, baggage) => {
   /** @type { Zone } */
   const zone = makeDurableZone(baggage, 'rootZone');
 
-  const { purse: airdropPurse, timer } = privateArgs;
+  const marshaller = makeMarshal();
+  const { purse: airdropPurse, bonusPurse, timer } = privateArgs;
 
   /** @type {ContractTerms} */
   const {
     startTime,
-    rootHash,
+    TreeRemotable,
+    hash,
     // schedule: distributionSchedule,
     endTime,
     tokenName = 'Airdroplets',
     brands: { Token: tokenBrand },
     issuers: { Token: tokenIssuer },
   } = zcf.getTerms();
-  debugger;
   // const tokenMint = zcf.makeZCFMint(tokenName);
 
   const basePayout = AmountMath.make(tokenBrand, 1000n);
 
-  const t0 = await E(timer).getCurrentTimestamp();
-
+  const [t0, handleProofVerification] = await Promise.all([
+    E(timer).getCurrentTimestamp(),
+    E(TreeRemotable).getVerificationFn(),
+  ]);
   await objectToMap(
     {
       // exchange this for a purse created from ZCFMint
+      TreeRemotable,
+      bonusPurse,
       purse: airdropPurse,
       tokenIssuer,
       startTime: createFutureTs(t0, startTime),
@@ -126,6 +134,7 @@ export const start = async (zcf, privateArgs, baggage) => {
   ].map(getKey(baggage));
 
   console.log('AIRDROP STATUS', claimedAccountsStore);
+  console.log('baggage::::', { keys: [...baggage.keys()] });
   airdropStatus.init('currentStatus', INITIALIZED);
 
   const stateMachine = makeStateMachine(
@@ -202,7 +211,7 @@ export const start = async (zcf, privateArgs, baggage) => {
         getAirdropTokenIssuer() {
           return tokenIssuer;
         },
-        makeClaimInvitation() {
+        async makeClaimInvitation() {
           assert(
             airdropStatus.get('currentStatus') === AIRDROP_STATES.OPEN,
             'Claim attempt failed.',
@@ -216,13 +225,20 @@ export const start = async (zcf, privateArgs, baggage) => {
             async (seat, offerArgs) => {
               const amount = await E(tokenIssuer).getAmountOf(payment);
 
-              console.log({ offerArgs });
-              // TODO: add assertion checking whether users exists
-              claimedAccountsStore.add(offerArgs.walletAddress, {
+              const offerArgsInput = marshaller.fromCapData(offerArgs);
+              const proof = await E(offerArgsInput.proof).getProof();
+
+              assert(
+                !claimedAccountsStore.has(offerArgsInput.address),
+                `Allocation for address ${offerArgsInput.address} has already been claimed.`,
+              );
+              claimedAccountsStore.add(offerArgsInput.address, {
                 amount,
               });
-
-              console.log([...claimedAccountsStore.entries()]);
+              assert(
+                handleProofVerification(proof, offerArgsInput.pubkey),
+                `Failed to verify the existence of pubkey ${offerArgsInput.pubkey}.`,
+              );
 
               await depositToSeat(
                 zcf,

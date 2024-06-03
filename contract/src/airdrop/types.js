@@ -17,3 +17,24 @@
  * @property {bigint} index The index of a particular epoch.
  * @property {number} inDays Length of epoch formatted in total number of days
  */
+
+/**
+ * Represents cosmos account information.
+ * @typedef {object} cosmosAccountInformation
+ * @property {string} prefix - The prefix.
+ * @property {object} pubkey - The public key.
+ * @property {string} pubkey.type - The type of the public key.
+ * @property {string} pubkey.value - The value of the public key.
+ * @property {string} expected - The expected value.
+ */
+
+/**
+ * Object used for test purpoes only. The ExpectedValue
+ * @typedef {object} ExpectedValue
+ * @property {any} expected
+ */
+
+/**
+ * Represents a testable account with cosmos account information and expected value.
+ * @typedef {cosmosAccountInformation & ExpectedValue} TestableAccount
+ */
