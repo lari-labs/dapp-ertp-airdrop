@@ -1,7 +1,6 @@
 // @ts-check
 // eslint-disable-next-line import/order
 import { test as anyTest } from './prepare-test-env-ava.js';
-import { MerkleTree } from 'merkletreejs';
 import { sha256 } from '@noble/hashes/sha256';
 import { accounts, pubkeys, testTree } from './data/agoric.accounts.js';
 import { compose } from '../src/airdrop/helpers/objectTools.js';
