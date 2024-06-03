@@ -5,7 +5,6 @@ import { createRequire } from 'module';
 import { E, Far } from '@endo/far';
 import { AmountMath } from '@agoric/ertp/src/amountMath.js';
 import { TimeMath } from '@agoric/time';
-// ??? import { Id, IO, Task } from '../src/airdrop/adts/monads.js';
 import { bootAndInstallBundles } from '../tools/boot-tools.js';
 import { makeBundleCacheContext } from '../tools/bundle-tools.js';
 
@@ -21,11 +20,29 @@ import {
 } from './data/agoric.accounts.js';
 import { TimeIntervals } from '../src/airdrop/helpers/time.js';
 import { setup } from './setupBasicMints.js';
-import { Id } from '../src/airdrop/adts/monads.js';
 import { compose } from '../src/airdrop/helpers/objectTools.js';
 import { makeMarshal } from '@endo/marshal';
 import { createClaimSuccessMsg } from '../src/airdrop/helpers/messages.js';
 import { makeTreeRemotable } from './data/tree.utils.js';
+
+const Id = value => ({
+  value,
+  map: f => Id(f(value)),
+  chain: f => f(value),
+  extract: () => value,
+  concat: o => Id(value.concat(o.extract())),
+  inspect() {
+    console.log(
+      'Id(',
+      typeof this.value === 'object'
+        ? Object.entries(this.value).map(x => x)
+        : this.value,
+      ')',
+    );
+    return Id(this.value);
+  },
+});
+Id.of = x => Id(x);
 
 const head = ([x]) => x;
 const parseAccountInfo = ({ pubkey, address }) => ({

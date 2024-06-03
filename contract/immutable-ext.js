@@ -1,16 +1,15 @@
 import { List, Map } from 'immutable';
-import { State, StateT } from './src/airdrop/adts/monads.js';
 
 const derived = {
-  fold (empty) {
+  fold(empty) {
     return this.foldMap(x => x, empty);
   },
-  foldMap (f, empty) {
+  foldMap(f, empty) {
     return empty != null
       ? this.reduce((acc, x, i) => acc.concat(f(x, i)), empty)
       : this.map(f).reduce((acc, x) => acc.concat(x));
   },
-  sequence (point) {
+  sequence(point) {
     return this.traverse(point, x => x);
   },
 };
