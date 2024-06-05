@@ -193,6 +193,50 @@ export const start = async (zcf, privateArgs, baggage) => {
 
         //   return AmountMath.add(earlyClaimBonus, basePayout);
         // },
+        /**
+         * @param {TimestampRecord} absTime
+         * @param {number} epochIdx
+         */
+        updateEpochDetails(absTime, epochIdx) {
+          const { state } = this;
+          const { helper } = this.facets;
+          assert(
+            epochIdx < state.distributionSchedule.length,
+            `epochIdx ${epochIdx} is out of bounds`,
+          );
+          const newEpochDetails = state.distributionSchedule[epochIdx];
+
+          state.currentEpochEndTime = TimeMath.addAbsRel(
+            absTime,
+            newEpochDetails.windowLength,
+          );
+          state.earlyClaimBonus = newEpochDetails.tokenQuantity;
+
+          helper.updateDistributionMultiplier(newEpochDetails);
+        },
+        async updateDistributionMultiplier(newEpochDetails) {
+          const { facets } = this;
+          const epochDetails = newEpochDetails;
+
+          const { absValue } = await E(timer).getCurrentTimestamp();
+          this.state.currentCancelToken = cancelTokenMaker();
+
+          void E(timer).setWakeup(
+            TimeMath.absValue(absValue + epochDetails.windowLength),
+            makeWaker(
+              'updateDistributionEpochWaker',
+              /** @param {TimestampRecord} latestTs */
+              latestTs => {
+                this.state.currentEpoch += 1;
+                facets.helper.updateEpochDetails(
+                  latestTs,
+                  this.state.currentEpoch,
+                );
+              },
+            ),
+          );
+          return 'wake up successfully set.';
+        },
         async cancelTimer() {
           await E(timer).cancel(this.state.currentCancelToken);
         },
