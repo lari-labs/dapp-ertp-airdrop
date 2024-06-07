@@ -1,33 +1,116 @@
 import { Far } from '@endo/marshal';
 
-const ONE_THOUSAND = 1_000;
-const SIXTY = 60;
+/**
+ * Represents the number one thousand as a BigInt.
+ *
+ * @constant {bigint}
+ */
+const ONE_THOUSAND = 1_000n;
 
+/**
+ * Represents the number sixty as a BigInt.
+ *
+ * @constant {bigint}
+ */
+const SIXTY = 60n;
+
+/**
+ * Transforms a curried function into an uncurried function.
+ *
+ * @function
+ * @param {Function} fn - The curried function to uncurry.
+ * @returns {Function} The uncurried function.
+ */
+const uncurry =
+  fn =>
+  (...args) =>
+    args.reduce((fn, arg) => fn(arg), fn);
+
+/**
+ * A curried multiply function.
+ *
+ * @function
+ * @param {bigint} x - The first multiplier.
+ * @returns {Function} A function that takes the second multiplier and returns the product.
+ */
 const multiply = x => y => x * y;
-const secondsToMilliseconds = seconds => seconds * ONE_THOUSAND;
-const toBigInt = x => BigInt(x);
-const oneMinute = secondsToMilliseconds(60);
-const oneHour = multiply(oneMinute)(60);
-const oneDay = multiply(oneHour)(24);
-const oneWeek = multiply(oneDay)(7);
 
-const TIME_RANGES_IN_MS = {
-  ONE_DAY: oneDay * 1000,
-  ONE_WEEK: oneWeek * 1000,
-};
+/**
+ * An uncurried version of the multiply function.
+ *
+ * ex.
+ * <code>uMult(2, 3) // 6 </code>
+ *
+ * uMult(10n, 10n) // 100n
+ *
+ * @function
+ * @param {bigint | number} x
+ * @param {bigint | number} y
+ */
+const uMult = uncurry(multiply);
 
+/**
+ * A curried function to multiply a number by one thousand.
+ *
+ * @constant {Function}
+ */
+const multByOneK = multiply(ONE_THOUSAND);
+
+/**
+ * Represents the number of seconds in one hour.
+ *
+ * @constant {bigint}
+ */
+const ONE_HOUR = uMult(SIXTY, SIXTY);
+
+/**
+ * Represents the number of seconds in one day.
+ *
+ * @constant {bigint}
+ */
+const oneDay = uMult(ONE_HOUR, 24n);
+
+/**
+ * Represents the number of seconds in one week.
+ *
+ * @constant {bigint}
+ */
+const oneWeek = uMult(oneDay, 7n);
+
+/**
+ * Represents various time intervals.
+ *
+ * This object categorizes time intervals by different units such as seconds and milliseconds.
+ *
+ * @namespace
+ */
 export const TimeIntervals = {
+  /**
+   * Time intervals represented in seconds.
+   *
+   * @type {Object}
+   * @property {bigint} ONE_DAY - Number of seconds in one day.
+   * @property {bigint} ONE_HOUR - Number of seconds in one hour.
+   */
   SECONDS: {
     ONE_DAY: BigInt(oneDay),
-    ONE_HOUR: oneHour,
+    ONE_HOUR: 3_600n,
   },
-  MILLISECONDS: TIME_RANGES_IN_MS,
+  /**
+   * Time intervals represented in milliseconds.
+   *
+   * @type {Object}
+   * @property {number} ONE_DAY - Number of milliseconds in one day.
+   * @property {number} ONE_WEEK - Number of milliseconds in one week.
+   */
+  MILLISECONDS: {
+    ONE_DAY: multByOneK(oneDay),
+    ONE_WEEK: multByOneK(oneWeek),
+  },
 };
 
-const makeCancelTokenMaker = name => {
-  let tokenCount = 1;
-
-  return () => Far(`cancelToken-${name}-${(tokenCount += 1)}`, {});
+const makeCancelTokenMaker = (name, startCount = 0) => {
+  return () => Far(`cancelToken-${name}-${(startCount += 1)}`, {});
 };
 
 const makeWaker = (name, func) => {
@@ -35,14 +118,12 @@ const makeWaker = (name, func) => {
     wake: timestamp => func(timestamp),
   });
 };
+
 export {
   makeCancelTokenMaker,
   makeWaker,
-  oneMinute,
   oneDay,
   oneWeek,
   ONE_THOUSAND,
   SIXTY,
-  secondsToMilliseconds,
-  TIME_RANGES_IN_MS,
 };

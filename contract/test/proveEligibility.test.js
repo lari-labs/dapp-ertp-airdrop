@@ -20,10 +20,11 @@ import {
 } from './data/agoric.accounts.js';
 import { TimeIntervals } from '../src/airdrop/helpers/time.js';
 import { setup } from './setupBasicMints.js';
-import { compose } from '../src/airdrop/helpers/objectTools.js';
+import { compose, objectToMap } from '../src/airdrop/helpers/objectTools.js';
 import { makeMarshal } from '@endo/marshal';
 import { createClaimSuccessMsg } from '../src/airdrop/helpers/messages.js';
 import { makeTreeRemotable } from './data/tree.utils.js';
+import { trace } from 'console';
 
 const Id = value => ({
   value,
@@ -68,7 +69,7 @@ const simulateClaim = async (
   // proof should be used to verify proof against tree (e.g. tree.verify(proof, leafValue, hash) where tree is the merkletree, leafValue is pubkey value, and root hash of tree)
   // address is used in conjunction with namesByAddress/namesByAddressAdmin to send tokens to claimain (see https://docs.agoric.com/guides/integration/name-services.html#namesbyaddress-namesbyaddressadmin-and-depositfacet-per-account-namespace)
   const { pubkey, address, proof } = claimAccountDetails;
-
+  console.log({ pubkey });
   const { zoe, memeIssuer: tokenIssuer } = await t.context;
 
   const offerArgsObject = harden({
@@ -183,9 +184,52 @@ const PurseHolder = purse => ({
   },
 });
 
-const mintToPurse = mint => amount => purse =>
-  purse.deposit(mint.mintPayment(amount));
+const mintToPurse =
+  mint =>
+  ({ amount, purse }) =>
+    purse.deposit(mint.mintPayment(amount));
+
 const mintMemesToPurse = mintToPurse(memeMint);
+
+const defaultPurse = [
+  {
+    primaryPurse: memeIssuer.makeEmptyPurse(),
+    bonusPurse: memeIssuer.makeEmptyPurse(),
+  },
+];
+const id = x => x;
+
+const context = {
+  tokenMint: memeMint,
+};
+
+const mintToPurses = ({ primaryPurse, bonusPurse, baseSupply, bonusSupply }) =>
+  [
+    { amount: memes(baseSupply), purse: bonusPurse },
+    { amount: memes(bonusSupply), purse: primaryPurse },
+  ]
+    .map(trace('befoe mint'))
+    .map(x => mintToPurse(memeMint)(x));
+
+// test('Fn', async t => {
+//   Fn(x => mintMemesToPurse(x)).run();
+// });
+
+const makeTimerPowers = async ({ consume }) => {
+  const timer = await consume.chainTimerService;
+
+  const timerBrand = await E(timer).getTimerBrand();
+  const relTimeMaker = makeRelTimeMaker(timerBrand);
+
+  const relTime = relTimeMaker(TimeIntervals.SECONDS.ONE_DAY);
+
+  return {
+    timer,
+    timerBrand,
+    relTime,
+    relTimeMaker,
+  };
+};
 const makeTestContext = async t => {
   const bootKit = await bootAndInstallBundles(t, bundleRoots);
   console.log({ bootKit });
@@ -206,15 +250,15 @@ const makeTestContext = async t => {
   //   MemePurse.inspect(),
   // );
 
-  mintMemesToPurse(memes(500_000n))(MemePurse);
+  mintMemesToPurse({ amount: memes(500_000n), purse: MemePurse });
   t.deepEqual(MemePurse.checkBalance(), memes(500_000n));
 
   const AIRDROP_PAYMENT = memeMint.mintPayment(TOTAL_SUPPLY);
   const AIRDROP_PURSE = memeIssuer.makeEmptyPurse();
   AIRDROP_PURSE.deposit(AIRDROP_PAYMENT);
 
-  const startTime = relTimeMaker(TimeIntervals.SECONDS.ONE_DAY * 7n);
-  t.deepEqual(TimeMath.relValue(startTime), 86400000n * 7n);
+  const startTime = relTimeMaker(TimeIntervals.SECONDS.ONE_DAY);
+  t.deepEqual(TimeMath.relValue(startTime), TimeIntervals.SECONDS.ONE_DAY);
   const isFrozen = x => Object.isFrozen(x);
 
   t.deepEqual(
@@ -246,6 +290,15 @@ const makeTestContext = async t => {
     timer,
   };
 
+  const tiers = {
+    0: [1000, 800, 650, 500, 350],
+    1: [600, 480, 384, 307, 245],
+    2: [480, 384, 307, 200, 165],
+    3: [300, 240, 192, 153, 122],
+    4: [100, 80, 64, 51, 40],
+    5: [15, 13, 11, 9, 7],
+  };
+
   const makeStartOpts = ({
     customTerms = defaultCustomTerms,
     privateArgs = defaultPrivateArgs,
@@ -259,15 +312,18 @@ const makeTestContext = async t => {
     airdropInstallation,
     harden({ Token: memeIssuer }),
     harden({
-      TreeRemotable: testTreeRemotable,
+      tiers,
+      startEpoch: 0n,
+      totalEpochs: 5n,
+      epochLength: TimeIntervals.SECONDS.ONE_DAY,
       hash: TEST_TREE_DATA.rootHash,
       basePayoutQuantity: memes(ONE_THOUSAND),
-      startTime: relTimeMaker(TimeIntervals.SECONDS.ONE_DAY * 7n),
-      endTime: relTimeMaker(ONE_THOUSAND * ONE_THOUSAND),
+      startTime: relTimeMaker(TimeIntervals.SECONDS.ONE_DAY * 3n),
     }),
     harden({
       purse: AIRDROP_PURSE,
       bonusPurse: MemePurse.purse,
+      TreeRemotable: testTreeRemotable,
       timer,
     }),
     'c1-ownable-Airdrop',
@@ -376,12 +432,18 @@ test('airdrop claim :: eligible participant', async t => {
     first,
   );
 
+  const t0 = await E(timer).getCurrentTimestamp();
+  await E(timer).advanceTo(t0.absValue + 86_400n);
+
   await simulateClaim(
     t,
     await E(publicFacet).makeClaimInvitation(),
     memes(1000n),
     second,
   );
+  const t1 = await E(timer).getCurrentTimestamp();
+  await E(timer).advanceTo(t1.absValue + 86_400n);
+
   await simulateClaim(
     t,
     await E(publicFacet).makeClaimInvitation(),
@@ -390,7 +452,10 @@ test('airdrop claim :: eligible participant', async t => {
   );
 });
 
-test.todo('compare cliam amounts for different tiers');
+test('claim attempts with tiers', async t => {});
+
+test('airdrop claim :: claim attempts with tiers', async t => {});
+// const { publicFacet, timer, testTreeRemotable } = await t.context;
 
 test.todo('claim attempts after the last epoch has ended');
 

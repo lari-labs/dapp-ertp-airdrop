@@ -153,6 +153,15 @@ const processArray = array =>
   );
 
 const pubkeys = processArray(accounts);
+const trace = label => value => {
+  console.log(label, '::::', value);
+  return value;
+};
+
+const getLast = array => array[array.length - 1];
+const stringToArray = string => [...string];
+
+const getLastChar = compose(getLast, stringToArray);
 
 // pubkeys
 const tree1 = new MerkleTree(
@@ -171,4 +180,11 @@ const { tree: testTree, proofs } = TEST_TREE_DATA;
 const withProof = (o, i) => ({ ...o, proof: proofs[i], pubkey: pubkeys[i] });
 const preparedAccounts = accounts.map(withProof);
 
-export { accounts, pubkeys, preparedAccounts, testTree, TEST_TREE_DATA };
+export {
+  accounts,
+  pubkeys,
+  preparedAccounts,
+  testTree,
+  TEST_TREE_DATA,
+  getLastChar,
+};
