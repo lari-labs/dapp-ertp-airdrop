@@ -5,7 +5,10 @@ import { createRequire } from 'module';
 import { E, Far } from '@endo/far';
 import { AmountMath } from '@agoric/ertp/src/amountMath.js';
 import { TimeMath } from '@agoric/time';
-import { bootAndInstallBundles } from '../tools/boot-tools.js';
+import {
+  bootAndInstallBundles,
+  makeSmartWalletFactory,
+} from '../tools/boot-tools.js';
 import { makeBundleCacheContext } from '../tools/bundle-tools.js';
 
 /**
@@ -25,6 +28,7 @@ import { makeMarshal } from '@endo/marshal';
 import { createClaimSuccessMsg } from '../src/airdrop/helpers/messages.js';
 import { makeTreeRemotable } from './data/tree.utils.js';
 import { trace } from 'console';
+import { makeCopySet } from '@endo/patterns';
 
 const Id = value => ({
   value,
@@ -57,11 +61,17 @@ const defaultClaimaint = {
   proof: head(TEST_TREE_DATA.proofs),
 };
 
+const makeClaimOfferArgs = ({ pubkey, address, proof } = defaultClaimaint) => ({
+  pubkey,
+  address,
+  proof,
+});
+
 const simulateClaim = async (
   t,
   invitation,
   expectedPayout,
-  claimAccountDetails = defaultClaimaint,
+  claimAccountDetails = makeClaimOfferArgs(),
 ) => {
   const marshaller = makeMarshal();
   console.log('inside simulateClaim');
@@ -106,6 +116,8 @@ const simulateClaim = async (
 
   t.deepEqual(await E(tokenIssuer).isLive(claimPayment), true); // any particular reason for isLive check? getAmountOf will do that.
   t.deepEqual(await E(tokenIssuer).getAmountOf(claimPayment), expectedPayout);
+
+  t.log('tests pass for account:', claimAccountDetails.address);
 };
 const filename = new URL(import.meta.url).pathname;
 
@@ -230,9 +242,20 @@ const makeTimerPowers = async ({ consume }) => {
     relTimeMaker,
   };
 };
+// Example usage with AIRDROP_TIERS:
+const AIRDROP_TIERS = {
+  0: [1000, 800, 650, 500, 350],
+  1: [600, 480, 384, 307, 245],
+  2: [480, 384, 307, 200, 165],
+  3: [300, 240, 192, 153, 122],
+  4: [100, 80, 64, 51, 40],
+  5: [15, 13, 11, 9, 7],
+};
+
 const makeTestContext = async t => {
   const bootKit = await bootAndInstallBundles(t, bundleRoots);
   console.log({ bootKit });
+  const walletFactory = makeSmartWalletFactory(bootKit.powers);
   const { powers, bundles } = bootKit;
 
   const timer = await powers.consume.chainTimerService;
@@ -290,14 +313,8 @@ const makeTestContext = async t => {
     timer,
   };
 
-  const tiers = {
-    0: [1000, 800, 650, 500, 350],
-    1: [600, 480, 384, 307, 245],
-    2: [480, 384, 307, 200, 165],
-    3: [300, 240, 192, 153, 122],
-    4: [100, 80, 64, 51, 40],
-    5: [15, 13, 11, 9, 7],
-  };
+  const objectToSymbolArray = obj =>
+    Object.entries(obj).map(([key, value], index) => [index, value]);
 
   const makeStartOpts = ({
     customTerms = defaultCustomTerms,
@@ -312,9 +329,9 @@ const makeTestContext = async t => {
     airdropInstallation,
     harden({ Token: memeIssuer }),
     harden({
-      tiers,
-      startEpoch: 0n,
-      totalEpochs: 5n,
+      tiers: AIRDROP_TIERS,
+      startEpoch: 0,
+      totalEpochs: 5,
       epochLength: TimeIntervals.SECONDS.ONE_DAY,
       hash: TEST_TREE_DATA.rootHash,
       basePayoutQuantity: memes(ONE_THOUSAND),
@@ -331,6 +348,7 @@ const makeTestContext = async t => {
 
   t.context = {
     ...t.context,
+    walletFactory,
     invitationIssuer,
     invitationBrand,
     memeIssuer,
@@ -344,7 +362,9 @@ const makeTestContext = async t => {
     publicFacet: instance.publicFacet,
   };
 };
-
+test.beforeEach('setup', async t => {
+  await makeTestContext(t);
+});
 test('airdrop purses', async t => {
   const { initialSupply, bonusSupply } = makeMemesSupply(
     1_000_000n,
@@ -401,12 +421,11 @@ test('merkle tree verification', t => {
 });
 
 test('airdrop claim :: eligible participant', async t => {
-  await makeTestContext(t);
-
   const { publicFacet, timer, testTreeRemotable } = await t.context;
 
   const validateFn = await E(testTreeRemotable).getVerificationFn();
-  const [first, second, third, ...rest] = preparedAccounts;
+  const [alice, bob, carol, dan, eva, ...x] =
+    preparedAccounts.map(makeClaimOfferArgs);
 
   await preparedAccounts.map(({ proof }, index) =>
     proof.map(({ data }) =>
@@ -418,44 +437,113 @@ test('airdrop claim :: eligible participant', async t => {
     ),
   );
 
-  t.deepEqual(
-    validateFn(first.proof, first.pubkey),
-    true,
-    'TreeRemotable should expose function that properly verifies a proof against a Merkle tree',
+  await preparedAccounts.map(x =>
+    t.deepEqual(
+      validateFn(x.proof, x.pubkey),
+      true,
+      'TreeRemotable should expose function that properly verifies a proof against a Merkle tree',
+    ),
   );
+
   await E(timer).advanceTo(2719838800n);
+
+  const getTier = ({ pubkey }) => pubkey.slice(pubkey.length - 1);
+
+  const toNumber = x => Number(x);
+
+  const formatTierForLookup = compose(toNumber, getTier);
+
+  t.deepEqual(
+    formatTierForLookup(alice),
+    1,
+    `formatTierForLoopp given alice's pubkey should return a value indicating the correct tier for the account.`,
+  );
+
+  const toBigInt = x => BigInt(x);
+  const getExpectedTokenAMount = epoch =>
+    compose(toBigInt, x => AIRDROP_TIERS[epoch][x], formatTierForLookup);
 
   await simulateClaim(
     t,
     await E(publicFacet).makeClaimInvitation(),
-    memes(1000n),
-    first,
+    memes(getExpectedTokenAMount(0)(alice)),
+    alice,
   );
 
   const t0 = await E(timer).getCurrentTimestamp();
   await E(timer).advanceTo(t0.absValue + 86_400n);
 
-  await simulateClaim(
-    t,
-    await E(publicFacet).makeClaimInvitation(),
-    memes(1000n),
-    second,
+  t.deepEqual(
+    formatTierForLookup(bob),
+    2,
+    `formatTierForLoopp given bob's pubkey should return a value indicating the correct tier for the account.`,
   );
-  const t1 = await E(timer).getCurrentTimestamp();
-  await E(timer).advanceTo(t1.absValue + 86_400n);
 
   await simulateClaim(
     t,
     await E(publicFacet).makeClaimInvitation(),
-    memes(1000n),
-    third,
+    memes(getExpectedTokenAMount(1)(bob)),
+    bob,
+  );
+  const t1 = await E(timer).getCurrentTimestamp();
+
+  await simulateClaim(
+    t,
+    await E(publicFacet).makeClaimInvitation(),
+    memes(getExpectedTokenAMount(1)(carol)),
+    carol,
+  );
+
+  await E(timer).advanceBy(90_000n);
+
+  await simulateClaim(
+    t,
+    await E(publicFacet).makeClaimInvitation(),
+    memes(getExpectedTokenAMount(2)(dan)),
+    dan,
   );
 });
 
-test('claim attempts with tiers', async t => {});
+// test('claim attempts with tiers', async t => {
+//   await makeTestContext(t);
 
-test('airdrop claim :: claim attempts with tiers', async t => {});
-// const { publicFacet, timer, testTreeRemotable } = await t.context;
+//   const { publicFacet, timer, testTreeRemotable } = await t.context;
+
+//   const validateFn = await E(testTreeRemotable).getVerificationFn();
+//   const [alice, bob, carol, dan, eva, ...x] =
+//     preparedAccounts.map(makeClaimOfferArgs);
+
+//   await E(timer).advanceTo(2719838800n);
+
+//   await simulateClaim(
+//     t,
+//     await E(publicFacet).makeClaimInvitation(),
+//     memes(1000n),
+//     alice,
+//   );
+
+//   const t0 = await E(timer).getCurrentTimestamp();
+//   await E(timer).advanceTo(t0.absValue + 86_400n);
+
+//   await simulateClaim(
+//     t,
+//     await E(publicFacet).makeClaimInvitation(),
+//     memes(1000n),
+//     bob,
+//   );
+//   const t1 = await E(timer).getCurrentTimestamp();
+//   await E(timer).advanceTo(t1.absValue + 86_400n);
+
+//   await simulateClaim(
+//     t,
+//     await E(publicFacet).makeClaimInvitation(),
+//     memes(1000n),
+//     carol,
+//   );
+//   await E(timer).advanceTo(t1.absValue + 186_400n);
+// });
+// test('airdrop claim :: claim attempts with tiers', async t => {});
+// // const { publicFacet, timer, testTreeRemotable } = await t.context;
 
 test.todo('claim attempts after the last epoch has ended');
 

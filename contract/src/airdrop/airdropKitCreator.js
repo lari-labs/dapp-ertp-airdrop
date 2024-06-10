@@ -22,6 +22,8 @@ import { makeStateMachine } from './helpers/stateMachine.js';
 import { createClaimSuccessMsg } from './helpers/messages.js';
 import { objectToMap } from './helpers/objectTools.js';
 
+const getLast = x => x.slice(x.length - 1);
+
 const cancelTokenMaker = makeCancelTokenMaker('airdrop-campaign');
 
 const AIRDROP_STATES = {
@@ -50,6 +52,7 @@ export const privateArgsShape = harden({
 });
 
 export const customTermsShape = harden({
+  startEpoch: M.bigint(),
   tiers: M.any(),
   startEpoch: M.bigint(),
   totalEpochs: M.bigint(),
@@ -87,6 +90,11 @@ const createFutureTs = (sourceTs, inputTs) =>
  * @property {{ [keyword: string]: Issuer }} issuers
  */
 
+const makeIndexedKeyVal = (value, index) => ({
+  value,
+  key: index,
+});
+
 /**
  * @param {ZCF<ContractTerms>} zcf
  * @param {{ purse: Purse, bonusPurse: Purse, TreeRemotable: Remotable, timer: TimerService }} privateArgs
@@ -109,22 +117,60 @@ export const start = async (zcf, privateArgs, baggage) => {
     epochLength,
     brands: { Token: tokenBrand },
     issuers: { Token: tokenIssuer },
+    tiers,
   } = zcf.getTerms();
-  // const tokenMint = zcf.makeZCFMint(tokenName);
 
-  const basePayout = AmountMath.make(tokenBrand, 1000n);
+  const trace = label => value => {
+    console.log(label, '::::', value);
+    return value;
+  };
+  const tierSet = zone.setStore('tier set');
+
+  const isUndefined = x => x === undefined;
+  const not = x => !x;
+  const notUndefined = x => not(isUndefined(x));
+
+  const tiersObj = await [...Object.values(tiers)]
+    .map(trace('inside tiers map'))
+    .map(makeIndexedKeyVal)
+    .map(trace('after indexed kv'))
+    .map(harden)
+    .filter(notUndefined)
+    .map(({ key, value }) => key && tierSet.add(key, value));
+
+  console.log({ zone, setStore: zone.setStore, tiers });
 
   const getKeyFromBaggage = getKey(baggage);
   const setBaggageValue = setValue(baggage);
+
+  const tiersStore = zone.mapStore('airdrop tiers');
+
+  await tierSet.addAll(tiersObj);
+  console.log('TIER SET::', {
+    tierSet,
+    values: [...tierSet.values()],
+    keys: [...tierSet.keys()],
+    snaphot: tierSet.snapshot(),
+  });
+  await objectToMap(tiers, tiersStore);
+
+  const claimedAccountsSets = [...Object.keys(tiersObj)].map(x =>
+    zone.setStore(x),
+  );
+
+  await tiersStore.init('current', tiersStore.get('0'));
 
   const [t0, handleProofVerification] = await Promise.all([
     E(timer).getCurrentTimestamp(),
     E(TreeRemotable).getVerificationFn(),
   ]);
+
   await objectToMap(
     {
       // exchange this for a purse created from ZCFMint
       currentEpoch: startEpoch,
+      currentTier: tiersStore.get('0'),
+      airdropTiers: tiers,
       epochLength,
       totalEpochs,
       TreeRemotable,
@@ -142,14 +188,18 @@ export const start = async (zcf, privateArgs, baggage) => {
 
   const [setCurrentEpoch] = setters;
 
-  const [airdropStatus, claimedAccountsStore, currentEpochValue] = [
-    'airdropStatusTracker',
-    'claimedAccountsStore',
-    'currentEpoch',
-  ].map(getKeyFromBaggage);
+  const [airdropTiers, airdropStatus, claimedAccountsStore, currentEpochValue] =
+    [
+      'airdropTiers',
+      'airdropStatusTracker',
+      'claimedAccountsStore',
+      'currentEpoch',
+    ].map(getKeyFromBaggage);
+  console.log('AIRDROPTIERS SET:::', tiersStore, {
+    keys: [...tiersStore.keys()],
+    values: [...tiersStore.values()],
+  });
 
-  console.log('AIRDROP STATUS', { airdropStatus, currentEpochValue });
-  console.log('baggage::::', { keys: [...baggage.keys()] });
   airdropStatus.init('currentStatus', INITIALIZED);
 
   const stateMachine = makeStateMachine(
@@ -190,9 +240,10 @@ export const start = async (zcf, privateArgs, baggage) => {
      * @param {Purse} tokenPurse
      * @param {CopySet} store
      */
-    (tokenPurse, store, startEpoch) => ({
+    (tokenPurse, store, currentCancelToken) => ({
       /** @type { object } */
-      currentCancelToken: null,
+      currentTier: baggage.get('currentTier'),
+      currentCancelToken,
       currentEpochEndTime: 0n,
       // basePayout,
       // earlyClaimBonus: AmountMath.add(basePayout, 0n),
@@ -202,6 +253,12 @@ export const start = async (zcf, privateArgs, baggage) => {
     }),
     {
       helper: {
+        getPayoutAmount(tier) {
+          return AmountMath.make(
+            tokenBrand,
+            BigInt(tiersStore.get('current')[tier]),
+          );
+        },
         // combineAmounts() {
         //   const { earlyClaimBonus, basePayout } = this.state;
         //   mustMatch(
@@ -254,13 +311,32 @@ export const start = async (zcf, privateArgs, baggage) => {
                   latestTs,
                   currentE: this.state.currentEpoch,
                 });
+                // debugger;
+                baggage.set('currentEpoch', baggage.get('currentEpoch') + 1);
+                this.state.currentEpoch = baggage.get('currentEpoch');
                 console.log(
-                  'current from baggage',
-                  baggage.get('currentEpoch'),
-                  [...baggage.keys(), [...baggage.values()]],
+                  'this.state.currentEpoch :::',
+                  this.state.currentEpoch,
                 );
-                baggage.set('currentEpoch', baggage.get('currentEpoch') + 1n);
-                this.state.currentEpoch += 1n;
+                // baggage.set(
+                //   'currentTier',
+                //   Number(baggage.get('currentEpoch')) + 1,
+                // );
+                // debugger;
+
+                const latestSet =
+                  this.state.currentEpoch <= 0
+                    ? tiersStore.get('current')
+                    : tiersStore.set(
+                        'current',
+                        tiersStore.get(String(this.state.currentEpoch)),
+                      );
+
+                // debugger;
+
+                console.log('LATEST SET:::', latestSet);
+
+                console.log({ latestTs });
                 facets.helper.updateEpochDetails(
                   latestTs,
                   this.state.currentEpoch,
@@ -276,8 +352,8 @@ export const start = async (zcf, privateArgs, baggage) => {
       },
       creator: {
         /** @param {NatValue} x */
-        createPayment(x) {
-          return airdropPurse.withdraw(AmountMath.make(tokenBrand, x));
+        createPayment(amount) {
+          return airdropPurse.withdraw(amount);
         },
       },
       claimer: {
@@ -297,28 +373,37 @@ export const start = async (zcf, privateArgs, baggage) => {
            * @param {import('@agoric/ertp/src/types.js').Payment} payment
            */
           const claimHandler =
-            payment =>
             /** @type {OfferHandler} */
             async (seat, offerArgs) => {
-              const amount = await E(tokenIssuer).getAmountOf(payment);
-
+              const accountSetStore =
+                claimedAccountsSets[this.state.currentEpoch];
+              console.log('currentAirdropClaimSet', {
+                keys: claimedAccountsSets.map((x, i) =>
+                  console.log({
+                    epochStore: i,
+                    data: [...x.keys()],
+                  }),
+                ),
+              });
               const offerArgsInput = marshaller.fromCapData(offerArgs);
 
               const proof = await E(offerArgsInput.proof).getProof();
 
               assert(
-                !claimedAccountsStore.has(offerArgsInput.address),
+                !accountSetStore.has(offerArgsInput.address),
                 `Allocation for address ${offerArgsInput.address} has already been claimed.`,
               );
-              const getLast = x => x.slice(x.length - 1);
 
-              const getTier = getLast(offerArgsInput.pubkey);
-              console.log('TIER', getTier);
-              claimedAccountsStore.add(offerArgsInput.address, {
-                amount,
+              const payoutAmount = this.facets.helper.getPayoutAmount(
+                getLast(offerArgsInput.pubkey),
+              );
+              const payment = this.facets.creator.createPayment(payoutAmount);
+
+              accountSetStore.add(offerArgsInput.address, {
+                amount: payoutAmount,
               });
 
-              console.log('proof', { proof });
+              // console.log('proof', { proof });
               assert(
                 handleProofVerification(proof, offerArgsInput.pubkey),
                 `Failed to verify the existence of pubkey ${offerArgsInput.pubkey}.`,
@@ -327,29 +412,26 @@ export const start = async (zcf, privateArgs, baggage) => {
               await depositToSeat(
                 zcf,
                 seat,
-                { Payment: amount },
+                { Payment: payoutAmount },
                 { Payment: payment },
               );
               seat.exit();
-              return createClaimSuccessMsg(amount);
+              return createClaimSuccessMsg(payoutAmount);
             };
-          return zcf.makeInvitation(
-            claimHandler(this.facets.creator.createPayment(1000n)),
-            'airdrop claim handler',
-          );
+          return zcf.makeInvitation(claimHandler, 'airdrop claim handler');
         },
       },
     },
   );
 
+  const cancelToken = cancelTokenMaker();
   const { creator, helper, claimer } = makeUnderlyingAirdropKit(
     airdropPurse,
     baggage.get('airdropStatusTracker'),
-    baggage.get('currentEpoch'),
+    cancelToken,
   );
 
   console.log('START TIME', baggage.get('startTime'));
-  const cancelToken = cancelTokenMaker();
   await E(timer).setWakeup(
     baggage.get('startTime'),
     makeWaker('claimWindowOpenWaker', ({ absValue }) => {

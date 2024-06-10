@@ -83,7 +83,7 @@ const accounts = [
     },
   },
   {
-    tier: 1,
+    tier: 0,
     name: 'tgrex',
     type: 'local',
     address: 'agoric1zqhk63e5maeqjv4rgcl7lk2gdghqq5w60hhhdm',
@@ -123,7 +123,7 @@ const accounts = [
     },
   },
   {
-    tier: 1,
+    tier: 0,
     name: 'victor-da-best',
     type: 'local',
     address: 'agoric1vzqqm5dfdhlxh6n3pgkyp5z5thljklq3l02kug',
@@ -143,9 +143,24 @@ const concatenateProps = obj =>
     ? Right(`${obj.pubkey.key}${obj.tier}`)
     : Left('Invalid object structure');
 
+const toString = x => String(x);
+
+/**
+ * Represents cosmos account information.
+ * @typedef {object} EligibleAccountObject
+ * @property {string} prefix - The prefix.
+ * @property {object} pubkey - The public key.
+ * @property {string} pubkey.type - The type of the public key.
+ * @property {string} pubkey.value - The value of the public key.
+ * @property {number} tier - Number of tier an account falls into.
+ */
+
+/** @param {EligibleAccountObject} x */
+const formatTier = x => ({ ...x, tier: toString(x.tier) });
+
 // Processing array
 const processArray = array =>
-  array.map(obj =>
+  array.map(formatTier).map(obj =>
     concatenateProps(obj).fold(
       e => e,
       r => r,
@@ -175,11 +190,9 @@ const TEST_TREE_DATA = {
   leaves: pubkeys,
   proofs: pubkeys.map(getProof(tree1)),
 };
-
 const { tree: testTree, proofs } = TEST_TREE_DATA;
 const withProof = (o, i) => ({ ...o, proof: proofs[i], pubkey: pubkeys[i] });
-const preparedAccounts = accounts.map(withProof);
-
+const preparedAccounts = accounts.map(withProof).map(formatTier);
 export {
   accounts,
   pubkeys,

@@ -14,6 +14,8 @@ export const makeCompressFile = readFile => async filePath => {
   return compressed;
 };
 
+const tiers = [0, 1, 2, 3, 4, 5];
+
 const defaultDistributionArray = [
   { windowLength: 259_200n, tokenQuantity: 10_000n },
   { windowLength: 864_000n, tokenQuantity: 6_000n },
@@ -31,5 +33,10 @@ export const createDistributionConfig = (array = defaultDistributionArray) =>
       inDays: windowLength / 86_400n,
     }),
   );
+
+const compose =
+  (...fns) =>
+  initialValue =>
+    fns.reduceRight((acc, val) => val(acc), initialValue);
 
 harden(createDistributionConfig);

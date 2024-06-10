@@ -19,6 +19,23 @@ export const getBundleId = b => `b1-${b.endoZipBase64Sha512}`;
 
 const { entries } = Object;
 
+export const makeSmartWalletFactory = async powers => {
+  const { zoe, namesByAddressAdmin } = powers.consume;
+  const smartWalletIssuers = {
+    Invitation: await E(zoe).getInvitationIssuer(),
+    IST: await E(zoe).getFeeIssuer(),
+  };
+
+  // TODO: use CapData across vats
+  // const boardMarshaller = await E(board).getPublishingMarshaller();
+  const walletFactory = mockWalletFactory(
+    { zoe, namesByAddressAdmin },
+    smartWalletIssuers,
+  );
+
+  return { walletFactory, smartWalletIssuers };
+};
+
 /**
  * Make powers (zoe, timer and name services, etc.) sufficient to test
  * deploying and using contracts. priceAuthority is a dummy.

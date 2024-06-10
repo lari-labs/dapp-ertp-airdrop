@@ -38,3 +38,8 @@
  * Represents a testable account with cosmos account information and expected value.
  * @typedef {cosmosAccountInformation & ExpectedValue} TestableAccount
  */
+
+/**
+ * Represents a testable account with cosmos account information and expected value.
+ * @typedef {cosmosAccountInformation & {tier: String}} EligibleAccountObject
+ */
