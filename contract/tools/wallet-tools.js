@@ -1,21 +1,34 @@
+/**
+ * @file smart-wallet test tools
+ *
+ * @see {mockWalletFactory}
+ */
 // @ts-check
 import { E, Far } from '@endo/far';
 import { makePromiseKit } from '@endo/promise-kit';
+
+// eslint-disable-next-line import/no-extraneous-dependencies
+import { makeNotifier } from '@agoric/notifier';
+
 import { allValues, mapValues } from '../src/objectTools.js';
 
-export { allValues, mapValues };
+/**
+ * @typedef {import('@agoric/smart-wallet/src/offers.js').OfferSpec} OfferSpec
+ * @typedef {import('@agoric/smart-wallet/src/smartWallet.js').UpdateRecord} UpdateRecord
+ * @typedef {import('@agoric/smart-wallet/src/invitations.js').InvitationSpec} InvitationSpec
+ */
 
 const { values } = Object;
+const { Fail, quote: q } = assert;
+
+const DEPOSIT_FACET_KEY = 'depositFacet'; // XXX does agoric-sdk export this?
 
 /**
  * @param {{
  *   zoe: ERef<ZoeService>;
- *   chainStorage: ERef<StorageNode>;
  *   namesByAddressAdmin: ERef<import('@agoric/vats').NameAdmin>;
  * }} powers
- *
- * @param issuerKeywordRecord
- * @typedef {import('@agoric/smart-wallet').OfferSpec} OfferSpec
+ * @param {IssuerKeywordRecord} issuerKeywordRecord
  *
  * @typedef {Awaited<ReturnType<Awaited<ReturnType<typeof mockWalletFactory>['makeSmartWallet']>>>} MockWallet
  */
@@ -23,24 +36,12 @@ export const mockWalletFactory = (
   { zoe, namesByAddressAdmin },
   issuerKeywordRecord,
 ) => {
-  const DEPOSIT_FACET_KEY = 'depositFacet';
-
-  const { Fail, quote: q } = assert;
-
-  //   const walletsNode = E(chainStorage).makeChildNode('wallet');
-
-  // TODO: provideSmartWallet
   /** @param {string} address */
   const makeSmartWallet = async address => {
-    console.group('------- makeSmartWallet ------');
-    console.log('-----------------------------');
-    console.log('address:::', address);
     const { nameAdmin: addressAdmin } = await E(
       namesByAddressAdmin,
     ).provideChild(address, [DEPOSIT_FACET_KEY]);
-    console.log('-----------------------------');
 
-    console.log('addressAdmin:::', addressAdmin);
     const entries = await Promise.all(
       values(issuerKeywordRecord).map(async issuer => {
         const purse = await E(issuer).makeEmptyPurse();
@@ -51,12 +52,6 @@ export const mockWalletFactory = (
       }),
     );
     const purseByBrand = new Map(entries);
-    console.log('-----------------------------');
-
-    console.log('walletEntries:::', entries);
-    console.log('-----------------------------');
-
-    console.groupEnd();
     const invitationBrand = await E(E(zoe).getInvitationIssuer()).getBrand();
     purseByBrand.has(invitationBrand) ||
       Fail`no invitation issuer / purse / brand`;
@@ -71,123 +66,72 @@ export const mockWalletFactory = (
           throw Error(`brand not known/supported: ${pBrand}`);
         const purse = purseByBrand.get(pBrand);
         assert(purse);
-        return E(purse).deposit(pmt);
+        const amt = await E(purse).deposit(pmt);
+        console.log('receive', address, amt);
+        return amt;
       },
     });
     await E(addressAdmin).default(DEPOSIT_FACET_KEY, depositFacet);
 
-    /** @param {ERef<Issuer>} issuer */
-    const addIssuer = async issuer => {
-      const brand = await E(issuer).getBrand();
-      if (purseByBrand.has(brand)) {
-        throw Error(`brand already present`);
-      }
-      const purse = await E(issuer).makeEmptyPurse();
-      purseByBrand.set(brand, purse);
-    };
-
-    // const updatesNode = E(walletsNode).makeChildNode(address);
-    // const currentNode = E(updatesNode).makeChildNode('current');
-
+    /** @param {InvitationSpec & { source: 'contract'}} invitationSpec */
     const getContractInvitation = invitationSpec => {
-      console.log('inside getContractInvitation:::', invitationSpec);
       const {
         instance,
         publicInvitationMaker,
         invitationArgs = [],
       } = invitationSpec;
       const pf = E(zoe).getPublicFacet(instance);
-      console.log('pf:::', pf);
-      const result = E(pf)[publicInvitationMaker](...invitationArgs);
-      console.log('E(pf)[publicInvitationMaker](...invitationArgs);', result);
-      return result;
+      return E(pf)[publicInvitationMaker](...invitationArgs);
     };
 
+    /** @param {InvitationSpec & { source: 'purse'}} invitationSpec */
     const getPurseInvitation = async invitationSpec => {
-      console.log('inside getPurseInvitation:::', invitationSpec);
-
-      //   const { instance, description } = invitationSpec;
       const invitationAmount = await E(invitationPurse).getCurrentAmount();
-      console.log(
-        '@@TODO: check invitation amount against instance',
-        invitationAmount,
+      // TODO: check instance too
+      const detail = invitationAmount.value.find(
+        d => d.description === invitationSpec.description,
       );
-      return E(invitationPurse).withdraw(invitationAmount);
+      detail ||
+        Fail`${q(invitationSpec.description)} not found in ${q(
+          invitationAmount,
+        )}`;
+      return E(invitationPurse).withdraw(
+        harden({ brand: invitationAmount.brand, value: [detail] }),
+      );
     };
 
     const offerToInvitationMakers = new Map();
-
+    /** @param {InvitationSpec & { source: 'continuing'}} spec */
     const getContinuingInvitation = async spec => {
-      console.log('inside getContinuingInvitation:::', spec);
-
       const { previousOffer, invitationMakerName, invitationArgs = [] } = spec;
       const makers =
         offerToInvitationMakers.get(previousOffer) ||
         Fail`${previousOffer} not found`;
-      console.log('offerToInvitationMakers ###', {
-        previousInvitationMakers: makers,
-      });
-
       return E(makers)[invitationMakerName](...invitationArgs);
     };
     const seatById = new Map();
     const tryExit = id =>
       E(seatById.get(id) || Fail`${id} not found`).tryExit();
 
-    const tracker = value => ({
-      value,
-      recordStep() {
-        this.value += 1;
-        console.group('  ####### tracker #########');
-        console.log('recording step number:', this.value);
-        console.log('###########################');
-        console.groupEnd();
-      },
-      inspect() {
-        `tracker(${value})`;
-      },
-    });
-    /** @param {OfferSpec} offerSpec */
+    /**
+     * Execute an offer (spec) and return a stream of updates
+     * that would be sent to vstorage.
+     *
+     * @param {OfferSpec} offerSpec
+     * @returns {AsyncGenerator<UpdateRecord>}
+     */
     async function* executeOffer(offerSpec) {
-      const offerExeuctionTracker = tracker(0);
-      offerExeuctionTracker.recordStep();
-      console.group('---------- inside executeOffer -----------');
-      console.log('----------------------------------------');
-      console.log('offerSpec', offerSpec);
-      console.log('----------------------------------------');
       const { invitationSpec, proposal = {}, offerArgs } = offerSpec;
-      console.log('invitationSpec', invitationSpec);
-      console.log('invitationSpec.source', invitationSpec.source);
-      console.log('----------------------------------------');
-      // Destructuring invitationSpec, proposal, offerArgs from offerSpec
-      // Destructuring source from invitationSpec
-
       const { source } = invitationSpec;
-      console.log('source ###', source);
-      console.groupEnd();
-
       const getter =
         {
           contract: getContractInvitation,
           purse: getPurseInvitation,
           continuing: getContinuingInvitation,
         }[source] || Fail`unsupported source: ${source}`;
-      console.log('getter::', { getter });
       const invitation = await getter(invitationSpec);
-      offerExeuctionTracker.recordStep();
-
-      console.log('inside executeOffer generator ########', {
-        offerSpec,
-        invitation,
-        invitationDetails: await E(zoe)
-          .getInvitationDetails(invitation)
-          .then(res => ({ handle: res.handle, instance: res.instance })),
-      });
-      offerExeuctionTracker.recordStep();
-
       const pmts = await allValues(
         mapValues(proposal.give || {}, async amt => {
-          console.log('inide mapValues ###', amt);
           const { brand } = amt;
           if (!purseByBrand.has(brand))
             throw Error(`brand not known/supported: ${brand}`);
@@ -196,20 +140,9 @@ export const mockWalletFactory = (
           return E(purse).withdraw(amt);
         }),
       );
-      console.log({ pmts });
-      offerExeuctionTracker.recordStep();
-
       // XXX throwing here is unhandled somehow.
       const seat = await E(zoe).offer(invitation, proposal, pmts, offerArgs);
-
-      console.log('seat.get(offerId)', seatById.get(offerSpec.id));
       seatById.set(offerSpec.id, seat);
-      console.log(
-        'seat.get(offerId) @@ after seat.set',
-        seatById.get(offerSpec.id),
-      );
-
-      offerExeuctionTracker.recordStep();
       //   console.log(address, offerSpec.id, 'got seat');
       yield { updated: 'offerStatus', status: offerSpec };
       const result0 = await E(seat).getOfferResult();
@@ -218,10 +151,6 @@ export const mockWalletFactory = (
       yield { updated: 'offerStatus', status: { ...offerSpec, result } };
       if (typeof result0 === 'object' && 'invitationMakers' in result0) {
         offerToInvitationMakers.set(offerSpec.id, result0.invitationMakers);
-        console.log(
-          "(typeof result0 === 'object' && 'invitationMakers' in result0)",
-        );
-        console.log('offersMap::', offerToInvitationMakers.get(offerSpec.id));
       }
       const [payouts, numWantsSatisfied] = await Promise.all([
         E(seat).getPayouts(),
@@ -243,15 +172,27 @@ export const mockWalletFactory = (
       };
     }
 
+    /**
+     * Get a stream of balance updates for a purse of a given brand.
+     *
+     * @param {Brand} brand
+     */
+    async function* purseUpdates(brand) {
+      const purse =
+        purseByBrand.get(brand) ||
+        Fail`no purse for ${q(brand)}; issuer missing? ${q(
+          issuerKeywordRecord,
+        )}`;
+      const n = makeNotifier(E(purse).getCurrentAmountNotifier());
+      for await (const amount of n) {
+        yield amount;
+      }
+    }
+
     return {
       deposit: depositFacet,
-      offers: Far('Offers', { executeOffer, addIssuer, tryExit }),
-      peek: Far('Wallet Peek', {
-        purseNotifier: brand =>
-          E(
-            purseByBrand.get(brand) || Fail`${q(brand)}`,
-          ).getCurrentAmountNotifier(),
-      }),
+      offers: Far('Offers', { executeOffer, tryExit }),
+      peek: Far('Wallet Peek', { purseUpdates }),
     };
   };
 
@@ -259,35 +200,29 @@ export const mockWalletFactory = (
 };
 
 /**
- * Seat-like API from updates
- * @param {*} updates
+ * Seat-like API from wallet updates
+ *
+ * @param {AsyncGenerator<UpdateRecord>} updates
  */
 export const seatLike = updates => {
-  console.log('inside seatLike:::', updates);
   const sync = {
     result: makePromiseKit(),
+    /** @type {PromiseKit<AmountKeywordRecord>} */
     payouts: makePromiseKit(),
   };
   (async () => {
+    await null;
     try {
-      console.log('inside try...catch');
-      console.log('current sync:::', sync);
       // XXX an error here is somehow and unhandled rejection
       for await (const update of updates) {
         if (update.updated !== 'offerStatus') continue;
-        console.log('-------- for await (update of updates ) -------');
         const { result, payouts } = update.status;
-        console.log('update.status', {
-          status: update.status,
-          update,
-          statusCheck: Object.hasOwn(update.status, 'result'),
-          payoutsCheck: Object.hasOwn(update.status, 'payouts'),
-          resultIn: 'result' in update.status,
-          payoutsIn: 'payouts' in update.status,
-          syncResult: sync.result,
-        });
         if ('result' in update.status) sync.result.resolve(result);
-        if ('payouts' in update.status) sync.payouts.resolve(payouts);
+        if ('payouts' in update.status && payouts) {
+          sync.payouts.resolve(payouts);
+          console.debug('paid out', update.status.id);
+          return;
+        }
       }
     } catch (reason) {
       sync.result.reject(reason);
@@ -297,18 +232,6 @@ export const seatLike = updates => {
   })();
   return harden({
     getOfferResult: () => sync.result.promise,
-    getPayouts: () => sync.payouts.promise,
+    getPayoutAmounts: () => sync.payouts.promise,
   });
-};
-
-export const makeWalletFactory = async (
-  { zoe, namesByAddressAdmin, chainStorage },
-  issuers,
-) => {
-  const invitationIssuer = await E(zoe).getInvitationIssuer();
-  const walletFactory = mockWalletFactory(
-    { zoe, namesByAddressAdmin, chainStorage },
-    { Invitation: invitationIssuer, ...issuers },
-  );
-  return walletFactory;
 };

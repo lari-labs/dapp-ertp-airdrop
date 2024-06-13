@@ -215,6 +215,8 @@ export const makeMockTools = async (t, bundleCache) => {
     smartWalletIssuers,
   );
 
+  console.log({ walletFactory });
+
   let pid = 0;
   const runCoreEval = async ({
     behavior,

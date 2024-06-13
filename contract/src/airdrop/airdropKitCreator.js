@@ -138,6 +138,9 @@ const createFutureTs = (sourceTs, inputTs) =>
 /**
  *
  * @typedef {object} ContractTerms
+ * @property {bigint} bonusSupply Number of tokens that should be made available if certain criteria is met. Whereas the base supply tokens are guaranteed to be available for distribution, tokens held within the bonus supply are only introduced into the contract when a certain criteria is met. (e.g. If X number of claims occur within an epoch, increase the supply of tokens by 1%)
+ * @property {bigint} baseSupply Base supply of tokens to be distributed throughout an airdrop campaign.
+ * @property {string} tokenName Name of the token to be created and then airdropped to eligible claimaints.
  * @property {bigint} totalEpochs Total number of epochs the airdrop campaign will last for.
  * @property {bigint} startTime Length of time (denoted in seconds) between the time in which the contract is started and the time at which users can begin claiming tokens.
  * @property {bigint} epochLength Length of time for each epoch, denominated in seconds.
@@ -176,24 +179,19 @@ export const start = async (zcf, privateArgs, baggage) => {
   const tokenMint = await zcf.makeZCFMint(tokenName)
 
 
-    const { brand : tokenBrand, issuer: tokenIssuer } = await tokenMint.getIssuerRecord()
+  const { brand: tokenBrand, issuer: tokenIssuer } = await tokenMint.getIssuerRecord()
+  const [baseAmount, bonusAmount] = [baseSupply, bonusSupply].map(x => AmountMath.make(tokenBrand, x))
+  const primarySeat = tokenMint.mintGains(harden({ Payment: baseAmount }))
+  const bonusSeat = (await tokenMint).mintGains({ Payment: bonusAmount })
 
-    const [baseAmount, bonusAmount] = [baseSupply, bonusSupply].map(x => AmountMath.make(tokenBrand, x))
-
-    const primarySeat = tokenMint.mintGains(harden({ Payment: baseAmount }))
-    const bonusSeat = (await tokenMint).mintGains({ Payment: bonusAmount })
-
-    
-    console.log('primarySeat:::',  primarySeat, primarySeat.getCurrentAllocation())
-    console.log('bonusSeat:::', bonusSeat.getCurrentAllocation())
+  console.log('primarySeat:::', primarySeat, primarySeat.getCurrentAllocation())
+  console.log('bonusSeat:::', bonusSeat.getCurrentAllocation())
 
   const trace = label => value => {
     console.log(label, '::::', value);
     return value;
   };
 
-
-  const getKeyFromBaggage = getKey(baggage);
   const setBaggageValue = setValue(baggage);
 
   const tiersStore = zone.mapStore('airdrop tiers');
@@ -201,7 +199,7 @@ export const start = async (zcf, privateArgs, baggage) => {
 
   const claimedAccountsSets = [...keys(tiers)].map(x => zone.setStore(x));
 
-  console.log({claimedAccountsSets, rep: [...keys(tiers)].map(x => zone.setStore(x))  })
+  console.log({ claimedAccountsSets, rep: [...keys(tiers)].map(x => zone.setStore(x)) })
 
   const [t0, handleProofVerification] = await Promise.all([
     E(timer).getCurrentTimestamp(),
@@ -228,17 +226,7 @@ export const start = async (zcf, privateArgs, baggage) => {
 
   const [setCurrentEpoch] = setters;
 
-  const [airdropTiers, airdropStatus, claimedAccountsStore, currentEpochValue] =
-    [
-      'airdropTiers',
-      'airdropStatusTracker',
-      'claimedAccountsStore',
-      'currentEpoch',
-    ].map(getKeyFromBaggage);
-  console.log('AIRDROPTIERS SET:::', tiersStore, {
-    keys: [...tiersStore.keys()],
-    values: [...tiersStore.values()],
-  });
+  const airdropStatus = baggage.get('airdropStatusTracker')
 
   airdropStatus.init('currentStatus', INITIALIZED);
 
@@ -329,13 +317,13 @@ export const start = async (zcf, privateArgs, baggage) => {
             currentEpoch,
           });
 
-      
+
           helper.updateDistributionMultiplier(
             TimeMath.addAbsRel(absTime, epochLength),
           );
         },
         async updateDistributionMultiplier(wakeTime) {
-          console.log('WAKE TIME:::', { wakeTime})
+          console.log('WAKE TIME:::', { wakeTime })
           const { facets } = this;
           // const epochDetails = newEpochDetails;
 
@@ -361,9 +349,9 @@ export const start = async (zcf, privateArgs, baggage) => {
                 this.state.currentEpoch <= 0
                   ? tiersStore.get('current')
                   : tiersStore.set(
-                      'current',
-                      tiersStore.get(String(this.state.currentEpoch)),
-                    );
+                    'current',
+                    tiersStore.get(String(this.state.currentEpoch)),
+                  );
 
                 // debugger
 
@@ -414,10 +402,23 @@ export const start = async (zcf, privateArgs, baggage) => {
           const claimHandler =
             /** @type {OfferHandler} */
             async (seat, offerArgs) => {
+
               const accountSetStore =
                 claimedAccountsSets[this.state.currentEpoch];
 
-              const {proof:proofRo, address, pubkey} = marshaller.fromCapData(offerArgs);
+              const { proof: proofRo, address, pubkey } = marshaller.fromCapData(offerArgs);
+              const proof = await E(proofRo).getProof();
+
+              assert(
+                handleProofVerification(proof, pubkey),
+                `Failed to verify the existence of pubkey ${pubkey}.`,
+              );
+              assert(
+                !accountSetStore.has(address),
+                `Allocation for address ${address} has already been claimed.`,
+              );
+
+
               // assert(address.length > 45, `Address exceeds maximum lenth`);
 
               // assert(mustMatch(
@@ -430,22 +431,11 @@ export const start = async (zcf, privateArgs, baggage) => {
               // ));
               const claimantTier = pubkey.slice(pubkey.length - 1);
 
-              console.log({ claimantTier });
-
-              const proof = await E(proofRo).getProof();
-
-          
-              assert(
-                !accountSetStore.has(address),
-                `Allocation for address ${address} has already been claimed.`,
-              );
               const paymentAmount = AmountMath.make(tokenBrand, BigInt(tiersStore.get('current')[claimantTier]));
               // const transferParts  = harden([
               //   [primarySeat, seat, {Payment:paymentAmount}], 
               //   [seat, primarySeat, {Payment:paymentAmount}], 
               // ]);
-              const payout =  seat.incrementBy(primarySeat.decrementBy({ Payment: paymentAmount }));
-              console.log('primarySeat', { primarySeat, current:payout })
               // atomicRearrange(zcf, harden(
               //   [
               //     fromOnly(primarySeat, { Payment: paymentAmount }),
@@ -453,23 +443,14 @@ export const start = async (zcf, privateArgs, baggage) => {
               //   ]
               // ))
 
-              accountSetStore.add(address, {
-                amount: 0,
-              });
-              
 
-              console.log('AFTER ADDING :::: ', {
-                claimCount: claimNumber,
-                keys: [...accountSetStore.keys()],
-              });
-              assert(
-                handleProofVerification(proof, pubkey),
-                `Failed to verify the existence of pubkey ${pubkey}.`,
-              );
-
-              console.log({paymentAmount})
-           
+              seat.incrementBy(primarySeat.decrementBy({ Payment: paymentAmount }));
               zcf.reallocate(primarySeat, seat)
+
+              accountSetStore.add(address, {
+                amount: paymentAmount.value,
+              });
+
               seat.exit();
               return createClaimSuccessMsg(paymentAmount);
             };

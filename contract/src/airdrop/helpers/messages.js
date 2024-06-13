@@ -12,7 +12,7 @@ const CONSTANTS = {
       `Successfully added ${list.length} eligible accounts.`,
   },
   CLAIM_MESSAGES: {
-    createClaimSuccessMsg: amt => `Successfully claimed ${q(amt)} tokens.`,
+    createClaimSuccessMsg: amt => `Successfully claimed ${q(amt.value)} tokens.`,
     OFFER_DESCRIPTION: 'claim airdrop invitation',
     INELIGIBLE_ACCOUNT_ERROR:
       'Claim failed. Signature does not correspond to an address on Airdrop allowlist.',

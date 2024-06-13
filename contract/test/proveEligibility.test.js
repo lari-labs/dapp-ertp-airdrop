@@ -10,6 +10,7 @@ import {
   makeSmartWalletFactory,
 } from '../tools/boot-tools.js';
 import { makeBundleCacheContext } from '../tools/bundle-tools.js';
+import { M , makeCopySet, mustMatch } from '@endo/patterns';
 
 /**
  * 1. add getTree and verifyProof method to TreeRemotable
@@ -28,7 +29,7 @@ import { makeMarshal } from '@endo/marshal';
 import { createClaimSuccessMsg } from '../src/airdrop/helpers/messages.js';
 import { makeTreeRemotable } from './data/tree.utils.js';
 import { trace } from 'console';
-import { makeCopySet } from '@endo/patterns';
+import { encodeBase64 } from '@endo/base64';
 
 const Id = value => ({
   value,
@@ -66,7 +67,7 @@ const makeClaimOfferArgs = ({ pubkey, address, proof } = defaultClaimaint) => ({
   address,
   proof,
 });
-
+const claimCount = 0;
 const simulateClaim = async (
   t,
   invitation,
@@ -79,23 +80,28 @@ const simulateClaim = async (
   // proof should be used to verify proof against tree (e.g. tree.verify(proof, leafValue, hash) where tree is the merkletree, leafValue is pubkey value, and root hash of tree)
   // address is used in conjunction with namesByAddress/namesByAddressAdmin to send tokens to claimain (see https://docs.agoric.com/guides/integration/name-services.html#namesbyaddress-namesbyaddressadmin-and-depositfacet-per-account-namespace)
   const { pubkey, address, proof } = claimAccountDetails;
-  console.log({ pubkey });
-  const { zoe, memeIssuer: tokenIssuer } = await t.context;
+  const { zoe, airdropIssuer: tokenIssuer } = await t.context;
 
-  const offerArgsObject = harden({
-    ...claimAccountDetails,
+  t.log('Proof::', proof)
+  const offerArgsObject = ({
+    address,
+    pubkey,
     proof: Far('proof', {
       getProof() {
-        return claimAccountDetails.proof;
-      },
+        return proof
+      }
     }),
+    encoded: encodeBase64(proof)
   });
+
+  t.log('offerArgsObject', offerArgsObject)
+
   /** @type {UserSeat} */
   const claimSeat = await E(zoe).offer(
     invitation,
     undefined,
     undefined,
-    marshaller.toCapData(offerArgsObject),
+    marshaller.toCapData(harden(offerArgsObject)),
   );
 
   t.log('------------ testing claim capabilities -------');
@@ -104,10 +110,10 @@ const simulateClaim = async (
   t.log('-----------------------------------------');
   t.log('expectedPayout value', expectedPayout);
   t.log('-----------------------------------------');
-
+  const offerResult = await E(claimSeat).getOfferResult()
   //
   t.deepEqual(
-    await E(claimSeat).getOfferResult(),
+    offerResult,
     // Need
     createClaimSuccessMsg(expectedPayout),
   );
@@ -115,7 +121,7 @@ const simulateClaim = async (
   const claimPayment = await E(claimSeat).getPayout('Payment');
 
   t.deepEqual(await E(tokenIssuer).isLive(claimPayment), true); // any particular reason for isLive check? getAmountOf will do that.
-  t.deepEqual(await E(tokenIssuer).getAmountOf(claimPayment), expectedPayout);
+  t.deepEqual(await E(tokenIssuer).getAmountOf(claimPayment), expectedPayout, `claimPayment #${claimCount} should contain the correct payment value.`);
 
   t.log('tests pass for account:', claimAccountDetails.address);
 };
@@ -203,17 +209,9 @@ const mintToPurse =
 
 const mintMemesToPurse = mintToPurse(memeMint);
 
-const defaultPurse = [
-  {
-    primaryPurse: memeIssuer.makeEmptyPurse(),
-    bonusPurse: memeIssuer.makeEmptyPurse(),
-  },
-];
 const id = x => x;
 
-const context = {
-  tokenMint: memeMint,
-};
+
 
 const mintToPurses = ({ primaryPurse, bonusPurse, baseSupply, bonusSupply }) =>
   [
@@ -254,7 +252,6 @@ const AIRDROP_TIERS = {
 
 const makeTestContext = async t => {
   const bootKit = await bootAndInstallBundles(t, bundleRoots);
-  console.log({ bootKit });
   const walletFactory = makeSmartWalletFactory(bootKit.powers);
   const { powers, bundles } = bootKit;
 
@@ -327,14 +324,15 @@ const makeTestContext = async t => {
   );
   const instance = await E(zoe).startInstance(
     airdropInstallation,
-    harden({ Token: memeIssuer }),
+    undefined,
     harden({
       tiers: AIRDROP_TIERS,
       startEpoch: 0,
       totalEpochs: 5,
       epochLength: TimeIntervals.SECONDS.ONE_DAY,
-      hash: TEST_TREE_DATA.rootHash,
-      basePayoutQuantity: memes(ONE_THOUSAND),
+      bonusSupply: 100_000n,
+      baseSupply: 10_000_000n,
+      tokenName: 'Tribbles',
       startTime: relTimeMaker(TimeIntervals.SECONDS.ONE_DAY * 3n),
     }),
     harden({
@@ -346,12 +344,17 @@ const makeTestContext = async t => {
     'c1-ownable-Airdrop',
   );
 
+  const airdropIssuer = await E(instance.publicFacet).getIssuer();
+  const issuerBrand = await airdropIssuer.getBrand()
+
+
   t.context = {
     ...t.context,
     walletFactory,
     invitationIssuer,
     invitationBrand,
-    memeIssuer,
+    airdropIssuer,
+    airdropAmount: x => AmountMath.make(issuerBrand, x),
     zoe,
     timer,
     primaryPurse: AIRDROP_PURSE,
@@ -421,7 +424,10 @@ test('merkle tree verification', t => {
 });
 
 test('airdrop claim :: eligible participant', async t => {
-  const { publicFacet, timer, testTreeRemotable } = await t.context;
+  const { publicFacet, timer, testTreeRemotable, airdropAmount } = await t.context;
+
+  const airdropIssuer = await E(publicFacet).getIssuer();
+  const issuerBrand = await airdropIssuer.getBrand()
 
   const validateFn = await E(testTreeRemotable).getVerificationFn();
   const [alice, bob, carol, dan, eva, ...x] =
@@ -463,10 +469,12 @@ test('airdrop claim :: eligible participant', async t => {
   const getExpectedTokenAMount = epoch =>
     compose(toBigInt, x => AIRDROP_TIERS[epoch][x], formatTierForLookup);
 
+  const tribbles = x => AmountMath.make(issuerBrand, x)
+
   await simulateClaim(
     t,
     await E(publicFacet).makeClaimInvitation(),
-    memes(getExpectedTokenAMount(0)(alice)),
+    tribbles(getExpectedTokenAMount(0)(alice)),
     alice,
   );
 
@@ -482,7 +490,7 @@ test('airdrop claim :: eligible participant', async t => {
   await simulateClaim(
     t,
     await E(publicFacet).makeClaimInvitation(),
-    memes(getExpectedTokenAMount(1)(bob)),
+    tribbles(getExpectedTokenAMount(1)(bob)),
     bob,
   );
   const t1 = await E(timer).getCurrentTimestamp();
@@ -490,7 +498,7 @@ test('airdrop claim :: eligible participant', async t => {
   await simulateClaim(
     t,
     await E(publicFacet).makeClaimInvitation(),
-    memes(getExpectedTokenAMount(1)(carol)),
+    tribbles(getExpectedTokenAMount(1)(carol)),
     carol,
   );
 
@@ -499,9 +507,11 @@ test('airdrop claim :: eligible participant', async t => {
   await simulateClaim(
     t,
     await E(publicFacet).makeClaimInvitation(),
-    memes(getExpectedTokenAMount(2)(dan)),
+    tribbles(getExpectedTokenAMount(2)(dan)),
     dan,
+
   );
+
 });
 
 // test('claim attempts with tiers', async t => {
