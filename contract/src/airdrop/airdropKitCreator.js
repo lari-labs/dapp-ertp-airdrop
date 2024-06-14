@@ -138,6 +138,7 @@ const createFutureTs = (sourceTs, inputTs) =>
 /**
  *
  * @typedef {object} ContractTerms
+ * @property {object} tiers 
  * @property {bigint} bonusSupply Number of tokens that should be made available if certain criteria is met. Whereas the base supply tokens are guaranteed to be available for distribution, tokens held within the bonus supply are only introduced into the contract when a certain criteria is met. (e.g. If X number of claims occur within an epoch, increase the supply of tokens by 1%)
  * @property {bigint} baseSupply Base supply of tokens to be distributed throughout an airdrop campaign.
  * @property {string} tokenName Name of the token to be created and then airdropped to eligible claimaints.
@@ -197,7 +198,7 @@ export const start = async (zcf, privateArgs, baggage) => {
   const tiersStore = zone.mapStore('airdrop tiers');
   await objectToMap({ ...tiers, current: tiers[0] }, tiersStore);
 
-  const claimedAccountsSets = [...keys(tiers)].map(x => zone.setStore(x));
+  const claimedAccountsSets = await [...keys(tiers)].map(x => zone.setStore(x));
 
   console.log({ claimedAccountsSets, rep: [...keys(tiers)].map(x => zone.setStore(x)) })
 
@@ -258,6 +259,7 @@ export const start = async (zcf, privateArgs, baggage) => {
       ),
       creator: M.interface('Creator', {
         createPayment: M.call().returns(M.any()),
+        handleBonusMintLogic: M.call(M.number()).returns(M.any())
       }),
       claimer: M.interface('Claimer', {
         makeClaimInvitation: M.call().returns(M.promise()),
@@ -275,10 +277,9 @@ export const start = async (zcf, privateArgs, baggage) => {
     (store, currentCancelToken) => ({
       /** @type { object } */
       currentTier: baggage.get('currentTier'),
+      currentEpochClaimCount:0,
       currentCancelToken,
       currentEpochEndTime: 0n,
-      // basePayout,
-      // earlyClaimBonus: AmountMath.add(basePayout, 0n),
       claimedAccounts: store,
       currentEpoch: baggage.get('currentEpoch'),
     }),
@@ -335,22 +336,26 @@ export const start = async (zcf, privateArgs, baggage) => {
               'updateDistributionEpochWaker',
               /** @param {TimestampRecord} latestTs */
               ({ absValue: latestTs }) => {
+                let { currentEpoch, currentEpochClaimCount } = this.state;
                 console.log('last epoch:::', {
                   latestTs,
-                  currentE: this.state.currentEpoch,
+                  currentE: currentEpoch,
+                  currentEpochClaimCount
                 });
+                this.facets.creator.handleBonusMintLogic(currentEpochClaimCount);
+
                 baggage.set('currentEpoch', baggage.get('currentEpoch') + 1);
-                this.state.currentEpoch = baggage.get('currentEpoch');
+                currentEpoch = baggage.get('currentEpoch');
                 console.log(
-                  'this.state.currentEpoch :::',
-                  this.state.currentEpoch,
+                  'currentEpoch :::',
+                  currentEpoch,
                 );
 
-                this.state.currentEpoch <= 0
+                currentEpoch <= 0
                   ? tiersStore.get('current')
                   : tiersStore.set(
                     'current',
-                    tiersStore.get(String(this.state.currentEpoch)),
+                    tiersStore.get(String(currentEpoch)),
                   );
 
                 // debugger
@@ -360,18 +365,48 @@ export const start = async (zcf, privateArgs, baggage) => {
                 console.log({ latestTs });
                 facets.helper.updateEpochDetails(
                   latestTs,
-                  this.state.currentEpoch,
+                  currentEpoch,
                 );
               },
             ),
+            this.state.currentCancelToken
           );
           return 'wake up successfully set.';
         },
         async cancelTimer() {
           await E(timer).cancel(this.state.currentCancelToken);
         },
+        increasePrimarySeatAllocation() {
+          // Transfer payment from bonusSeat to primarySeat -> increase supply by 0.5 percent. 
+          // The other 0.5 percent is distributed equally amongst claimants whose collective actions led to the bonusMint threshold being met.shold being met.
+        },
+        handleBookKeeping(store, { address, pubkey, amount, tier }) {
+          console.group('---------- inside handleBookKeeping----------');
+          console.log('------------------------');
+          console.log('setStore.keys() :: BEFORE ADDING NEW ENTRY ',[...store.keys()]);
+          console.log('------------------------');
+          console.log('::',);
+         
+          store.add(address, {
+            amount,
+            tier,
+            pubkey
+          });
+          // TODO
+          // logic for rewardClaimant
+          // if(this.store.currentEpochClaimCount >= bonusMintThreshold) rewardClaimants(store) && increasePrimarySeatAllocation();
+          
+          console.log('setStore.keys() :: AFTER ADDING NEW ENTRY ',[...store.keys()]);
+          console.log('------------------------');
+          console.groupEnd();
+          return `Successfully added ${address} to setStore.`
+        }
       },
       creator: {
+        handleBonusMintLogic(x) {
+          console.log('------------------------');
+          console.log('inside handleBonusMintLogic::', x)
+        },
         /**
          * @param {NatValue} x
          * @param amount
@@ -446,10 +481,9 @@ export const start = async (zcf, privateArgs, baggage) => {
 
               seat.incrementBy(primarySeat.decrementBy({ Payment: paymentAmount }));
               zcf.reallocate(primarySeat, seat)
+              this.state.currentEpochClaimCount +=1;
 
-              accountSetStore.add(address, {
-                amount: paymentAmount.value,
-              });
+              this.facets.helper.handleBookKeeping(accountSetStore, { address, pubkey, amount: paymentAmount, tier: claimantTier })
 
               seat.exit();
               return createClaimSuccessMsg(paymentAmount);
